@@ -9,6 +9,7 @@
     "lint": "next lint",
     "db:ensure": "bun scripts/ensure-db.ts",
     "db:push": "drizzle-kit push && bun scripts/generate-er.ts",
+    "db:seed:jeff": "bun src/lib/db/seed.jeff.ts",
     "test": "bun test src/lib/trpc/routers/__tests__",
     "test:coverage": "bun test --coverage src/lib/trpc/routers/__tests__"
   },
