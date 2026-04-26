@@ -149,8 +149,30 @@ export async function seedJeff(): Promise<void> {
     { sku: "GRIP-25MM", name: "Grip desechable 25mm", price: 12_000, cost: 5_500, amparoQty: 15, britaliaQty: 8 },
   ];
 
+  // Service products are intangible — no inventory balance and no SKU. They
+  // are matched idempotently by name within the business. Prices are stored
+  // as cents (matches the rest of the catalogue) so 200_000_00 = COP 200.000.
+  const sampleServices: Array<{
+    name: string;
+    price: number;
+    defaultServiceKind:
+      | "tattoo"
+      | "piercing"
+      | "touchup"
+      | "removal"
+      | "consultation"
+      | "other";
+  }> = [
+    { name: "Sesion tatuaje pequeño (1h)", price: 200_000_00, defaultServiceKind: "tattoo" },
+    { name: "Sesion tatuaje mediano (3h)", price: 500_000_00, defaultServiceKind: "tattoo" },
+    { name: "Piercing oreja (estandar)", price: 80_000_00, defaultServiceKind: "piercing" },
+    { name: "Touchup tatuaje", price: 100_000_00, defaultServiceKind: "touchup" },
+    { name: "Consulta diseño tatuaje", price: 0, defaultServiceKind: "consultation" },
+  ];
+
   let seededProducts = 0;
   let seededBalances = 0;
+  let seededServices = 0;
 
   if (amparo && britalia) {
     const skus = sampleProducts.map((p) => p.sku);
@@ -177,6 +199,7 @@ export async function seedJeff(): Promise<void> {
             sku: sample.sku,
             cost_amount: sample.cost,
             status: "active",
+            kind: "product",
           })
           .returning();
         productId = created.id;
@@ -223,6 +246,39 @@ export async function seedJeff(): Promise<void> {
         seededBalances += 1;
       }
     }
+  }
+
+  // ── Service products (Capa 8) ─────────────────────────────────────────────
+  // Idempotent by (business_id, name). Services are intangible: no inventory
+  // balance, no SKU, no cost. They surface in the POS catalogue grouped under
+  // "Servicios" and prefill the attach dialog with `default_service_kind`.
+  const serviceNames = sampleServices.map((s) => s.name);
+  const existingServices = await db
+    .select()
+    .from(products)
+    .where(
+      and(
+        eq(products.business_id, businessId),
+        inArray(products.name, serviceNames),
+      ),
+    );
+  const existingServiceByName = new Map(
+    existingServices.map((p) => [p.name, p]),
+  );
+
+  for (const svc of sampleServices) {
+    if (existingServiceByName.has(svc.name)) continue;
+    await db.insert(products).values({
+      name: svc.name,
+      price: svc.price,
+      in_stock: 0,
+      user_uid: ownerUserId,
+      business_id: businessId,
+      status: "active",
+      kind: "service",
+      default_service_kind: svc.defaultServiceKind,
+    });
+    seededServices += 1;
   }
 
   // ── Batch 6: expense categories + sample entries + supplier + purchase ────
@@ -634,6 +690,7 @@ export async function seedJeff(): Promise<void> {
       `owner=${JEFF_OWNER_EMAIL} (password=${JEFF_OWNER_PASSWORD}), ` +
       `locations=Amparo+Britalia, ` +
       `products=+${seededProducts} (total ${sampleProducts.length}), ` +
+      `services=+${seededServices} (total ${sampleServices.length}), ` +
       `balances=+${seededBalances}, ` +
       `expense_categories=+${seededCategories}, ` +
       `expense_entries=+${seededExpenses}, ` +
