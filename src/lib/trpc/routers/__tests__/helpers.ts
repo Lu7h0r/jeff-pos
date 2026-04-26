@@ -42,6 +42,17 @@ const TABLES: PgTable[] = [
   schema.suppliers,
   schema.purchaseOrders,
   schema.purchaseItems,
+  // Batch 8: staff, stations, services, commissions, location-level perms.
+  // FK-safe order: staff_members before workstations (workstations don't ref
+  // staff but station_rentals does); workstations before station_rentals
+  // (which refs both); service_sales after order_items + staff_members; and
+  // commission_estimates after service_sales + staff_members.
+  schema.staffMembers,
+  schema.workstations,
+  schema.stationRentals,
+  schema.serviceSales,
+  schema.commissionEstimates,
+  schema.locationMembers,
 ];
 
 // All identifiers are double-quoted to avoid clashes with Postgres reserved
