@@ -321,7 +321,16 @@ export const ordersRouter = router({
       return await db.transaction(async (tx) => {
         // Race-safe stock decrement — guarded UPDATE returns 0 rows if
         // someone else just sold the last unit. PLAN.md Riesgo 3.
+        //
+        // DA-26: service items (products.kind === "service") have no
+        // inventory rows — the ledger for services lives in `service_sales`,
+        // attached post-confirm via services.attachToOrderItem. We skip the
+        // balance UPDATE and the inventory_movements insert for them. Cash
+        // flow is unchanged: services are still paid for through caja.
         for (const item of input.items) {
+          const product = productById.get(item.productId)!;
+          if (product.kind === "service") continue;
+
           const updated = await tx
             .update(inventoryBalances)
             .set({
@@ -340,7 +349,7 @@ export const ordersRouter = router({
           if (updated.length === 0) {
             throw new TRPCError({
               code: "CONFLICT",
-              message: `Insufficient stock for product ${productById.get(item.productId)!.name}`,
+              message: `Insufficient stock for product ${product.name}`,
             });
           }
         }
@@ -381,6 +390,10 @@ export const ordersRouter = router({
           .returning();
 
         for (const item of input.items) {
+          // DA-26: service items have no inventory; ledger is service_sales
+          // (created post-confirm via services.attachToOrderItem).
+          if (productById.get(item.productId)!.kind === "service") continue;
+
           await tx.insert(inventoryMovements).values({
             business_id: loc.business_id,
             location_id: loc.id,
@@ -531,6 +544,30 @@ export const ordersRouter = router({
         .from(orderPayments)
         .where(eq(orderPayments.order_id, order.id));
 
+      // DA-26: branch the inventory reversal by product.kind. Services have
+      // no inventory_balances row, so a reverse UPDATE would be a no-op and
+      // the inventory_movements entry would be misleading. We resolve each
+      // item's product.kind once and skip the reversal for services.
+      // Note: service_sales / commission_estimates linked to service items
+      // are NOT auto-voided here; their lifecycle is handled separately by
+      // the services router (out of scope for this fix).
+      const itemProductIds = Array.from(
+        new Set(
+          items
+            .map((it) => it.product_id)
+            .filter((id): id is number => id != null),
+        ),
+      );
+      const productRows = itemProductIds.length
+        ? await db
+            .select()
+            .from(products)
+            .where(inArray(products.id, itemProductIds))
+        : [];
+      const productKindById = new Map(
+        productRows.map((p) => [p.id, p.kind] as const),
+      );
+
       const paymentMethodIds = Array.from(
         new Set(payments.map((p) => p.payment_method_id)),
       );
@@ -562,6 +599,22 @@ export const ordersRouter = router({
 
         for (const item of items) {
           if (item.product_id == null) continue;
+
+          // DA-26: services skip inventory restore. If the product row has
+          // since vanished (rare), default to skipping the reversal too —
+          // we cannot infer kind safely, and inserting a phantom positive
+          // movement would corrupt audit. The order_item snapshot still
+          // records the void via the parent order status.
+          const kind = productKindById.get(item.product_id);
+          if (kind === "service") continue;
+          if (kind === undefined) {
+            console.warn(
+              `orders.void: product ${item.product_id} no longer exists; ` +
+                `skipping inventory restore for order_item ${item.id}.`,
+            );
+            continue;
+          }
+
           await tx
             .update(inventoryBalances)
             .set({
