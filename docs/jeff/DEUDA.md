@@ -93,8 +93,13 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | DA-5 | `schema.ts paymentMethods` | baja | Batch 1 + Batch 1.5 | cerrada (query layer) |
 | DA-6 | `schema.ts inventoryBalances` | media | post-PGlite (PostgreSQL real) | abierta |
 | DA-7 | `schema.ts products.business_id` | media | Batch 4 (backfill + NOT NULL) | cerrada |
-| DA-8 | `orders.update` mutation | media | Batch 5 (dashboard refactor) | abierta |
+| DA-8 | `orders.update` mutation | media | Batch 5 | cerrada |
 | DA-9 | `paymentMethods` lacks is_cash flag | baja | TBD (futuro batch payment-methods) | abierta |
+| DA-10 | `orders.status` legacy column | baja | post-Batch 6 cleanup | abierta |
+| DA-11 | `transactions` row paralelo en orders.create | media | post-Batch 6 cleanup | abierta |
+| DA-12 | weighted-average cost no implementado | media | TBD (post-pilot real) | abierta |
+| DA-13 | `purchases.cancel` con sesion cerrada sin reversa | media | TBD | abierta |
+| DA-14 | `expense_entries` sin void | media | TBD | abierta |
 
 ## DA-6 — `inventory_balances` sin UNIQUE compound
 
@@ -140,7 +145,7 @@ Hoy es bug latente: PGlite es single-process, no hay concurrencia real. Cuando s
 
 Cuando dashboard.stats migre a leer `process_status` en lugar de `status` legacy, se puede retirar el modal de edicion de admin/orders y matar `orders.update` de raiz.
 
-**Estado:** abierta. Bug pasivo mientras nadie use el modal de edicion en produccion.
+**Estado:** cerrada. Commits `4a3bd1e` + `c7d3f8e` (Batch 5) eliminan `orders.update` completamente del router y reemplazan el modal de admin/orders con un editor solo de `notes` via `orders.editNotes`. `grep -r 'orders\.update'` queda vacio en `src/`. `markPartialPayment` se difiere hasta que haya un caso real (Jeff hoy no tiene clientes a fiar formalizados).
 
 ## DA-9 — `paymentMethods` carece de flag `is_cash` o taxonomia tipada
 
@@ -160,6 +165,89 @@ const isCash = paymentMethod.name.toLowerCase().includes("cash");
 Recomendacion: opcion 2. El reporte de `dashboard.stats` puede separar mejor por kind.
 
 **Estado:** abierta. No-bloqueante mientras el seed controle los nombres. Critico antes de dejar a Jeff crear payment methods libremente.
+
+## DA-10 — `orders.status` legacy column sin uso
+
+**Ubicacion:** `src/lib/db/schema.ts` tabla `orders`, columna `status` varchar(20). Valores legacy: `completed`, `pending`, `cancelled`.
+
+**Impacto:** En Batch 4 se introdujo `process_status` (pending/ongoing/complete/void) como source of truth. Batch 5 migro dashboard y admin/orders/page.tsx a leer `process_status`. Pero `orders.create` sigue escribiendo `status="completed"` para compatibilidad con codigo legacy que ya no existe. Es un campo zombie: ocupa espacio, agrega ruido al schema y puede confundir al proximo developer.
+
+**Resolucion:** post-Batch 6, batch de cleanup tecnico junto con DA-11. Pasos:
+
+1. `grep -r 'orders\.status' src/` para confirmar que nadie lee mas la columna legacy.
+2. Quitar el insert de `status` desde `orders.create`.
+3. UPDATE bulk de rows existentes (NULL them).
+4. Drop column en proxima migracion (cuando se decida usar Drizzle migrate formal).
+
+**Estado:** abierta. No-bloqueante.
+
+## DA-11 — `transactions` row paralelo en `orders.create`
+
+**Ubicacion:** `src/lib/trpc/routers/orders.ts` lineas 453-464 (aprox), bloque que inserta en `transactions` por compat-back con dashboard viejo.
+
+**Impacto:** Cada `orders.create` escribe TANTO en `order_payments` (Batch 4) COMO en `transactions` (legacy). El nuevo `dashboard.stats` (Batch 5) ya no lee de `transactions`. La doble escritura:
+
+- Dilata la transaction de venta atomica innecesariamente.
+- Genera datos contables redundantes que pueden divergir.
+- Mantiene viva una tabla que deberia retirarse o repurposearse para egresos manuales.
+
+**Resolucion:** post-Batch 6, batch de cleanup tecnico junto con DA-10. Decidir destino de `transactions`:
+
+- Opcion A: retirar completamente. `expense_entries` (Batch 6) cubre egresos. `cash_movements` (Batch 2) cubre flujo de caja. `order_payments` cubre pagos de venta. La tabla `transactions` no aporta nada nuevo.
+- Opcion B: mantener solo para integraciones futuras (importacion bancaria, conciliacion).
+
+Recomendacion: A. La eliminacion incluye drop column `payment_method_id` en transactions, drop FKs, drop tabla, ajustar tests.
+
+**Estado:** abierta. No-bloqueante. Bloqueante para perf si Jeff opera muchas ventas/dia (cada venta hace 2x writes redundantes).
+
+## DA-12 — Weighted-average cost no implementado en `purchases.receive`
+
+**Ubicacion:** `src/lib/trpc/routers/purchases.ts`, en el flow de `purchases.receive`.
+
+**Impacto:** Cuando se recibe una compra, `products.cost_amount` se sobrescribe con el `unit_cost` del item recibido (most-recent-purchase-price). Si Jeff compra el mismo producto a precios distintos en una semana:
+
+- Costo unitario en venta (`order_items.unit_cost` snapshot) refleja solo la ultima compra, no el promedio ponderado del stock real.
+- COGS calculado en dashboard se desvia del COGS real cuando hay volatilidad de costos.
+- Margen mostrado puede ser engañoso.
+
+**Resolucion:** TBD post-pilot real. Implementar weighted-average:
+
+```
+new_avg = (existing_qty * existing_cost + received_qty * received_cost) / (existing_qty + received_qty)
+```
+
+Requiere actualizar `inventory_balances` con un `avg_cost_amount` o recalcular desde `inventory_movements`.
+
+**Estado:** abierta. No-bloqueante para Jeff hoy (precios estables esperados). Reportar a Jeff cuando se note discrepancia P&L vs realidad.
+
+## DA-13 — `purchases.cancel` con sesion cerrada queda sin reversa contable
+
+**Ubicacion:** `src/lib/trpc/routers/purchases.ts`, mutation `purchases.cancel`.
+
+**Impacto:** Si la cash_session que pago la compra ya cerro (`status="closed"`), cancelar la PO marca `status="cancelled"` pero NO escribe la reversa en cash_movements (no se puede tocar ledger cerrado). Resultado: la caja del dia que se cerro tiene un cash_movements de salida (manual_out por la compra) que en realidad fue cancelada → diferencia contable silenciosa.
+
+**Resolucion:** TBD. Dos opciones:
+
+A. Prohibir cancelar PO con cash_session cerrada (CONFLICT). Forzar la cancelacion solo durante la sesion activa.
+B. Escribir la reversa en la sesion abierta CURRENT de la misma location (compensacion el dia siguiente). Documentar al operario que la diferencia se ve en la sesion del dia siguiente.
+
+Recomendacion: A para MVP (mas estricto, evita confusion). B requiere training operativo.
+
+**Estado:** abierta. Riesgo contable real cuando Jeff cancele una PO al dia siguiente.
+
+## DA-14 — `expense_entries` no tiene void / correccion auditable
+
+**Ubicacion:** `src/lib/trpc/routers/expenses.ts`. No existe `expenses.entries.void`.
+
+**Impacto:** Si Jeff registra un gasto mal (monto incorrecto, categoria errada, gasto duplicado), no hay forma de revertirlo desde el router. El operario tendria que ir a la DB directamente — anti-patron en POS.
+
+**Resolucion:** Mismo patron que `orders.void`:
+
+- agregar columnas `voided_at`, `voided_by_user_id`, `voidance_reason` a `expense_entries`.
+- nueva mutation `expenses.entries.void({ entryId, voidanceReason })`.
+- si el entry fue paid via cash_session, escribir reversa en cash_movements (manual_in con transaction_type=positive) si la sesion esta abierta. Si esta cerrada, aplicar la misma decision que DA-13.
+
+**Estado:** abierta. Probable bloqueante operativo cuando Jeff arranque a usar gastos en serio.
 
 ## Convencion de cierre
 
