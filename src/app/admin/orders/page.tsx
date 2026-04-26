@@ -101,11 +101,14 @@ export default function OrdersPage() {
     onSuccess: () => setIsDialogOpen(false),
   });
 
-  const deleteMutation = useCrudMutation({
-    mutationOptions: trpc.orders.delete.mutationOptions(),
+  // Batch 4: orders.delete was replaced by orders.void (DA-3 closure).
+  // The "Delete" affordance now triggers a void with a mandatory reason
+  // prompt; the row is preserved for audit and inventory/cash are reversed.
+  const voidMutation = useCrudMutation({
+    mutationOptions: trpc.orders.void.mutationOptions(),
     invalidateKeys,
-    successMessage: "Order deleted",
-    errorMessage: "Failed to delete order",
+    successMessage: "Order voided",
+    errorMessage: "Failed to void order",
   });
 
   const form = useForm({
@@ -143,7 +146,12 @@ export default function OrdersPage() {
 
   const handleDelete = () => {
     if (deleteId !== null) {
-      deleteMutation.mutate({ id: deleteId });
+      const reason = typeof window !== "undefined"
+        ? window.prompt("Reason for voiding this order (min 3 characters):") ?? ""
+        : "";
+      if (reason.trim().length >= 3) {
+        voidMutation.mutate({ orderId: deleteId, voidanceReason: reason.trim() });
+      }
       setIsDeleteOpen(false);
       setDeleteId(null);
     }
@@ -245,7 +253,7 @@ export default function OrdersPage() {
         </DialogContent>
       </Dialog>
 
-      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description="Are you sure you want to delete this order? This action cannot be undone." />
+      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description="Voiding will reverse stock and cash. The row is preserved for audit. You will be asked for a reason." />
     </Card>
   );
 }
