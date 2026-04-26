@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { MapPinIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +30,8 @@ function writeCookie(id: number): void {
 
 export function LocationSelector() {
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const router = useRouter();
   const { data: locations, isLoading } = useQuery(
     trpc.locations.list.queryOptions(),
   );
@@ -57,6 +60,13 @@ export function LocationSelector() {
   const handleChange = (id: number) => {
     setActiveId(id);
     writeCookie(id);
+    // React Query has no observer on cookies, so changing the cookie alone
+    // does not trigger refetches. Invalidate every active query so the next
+    // refetch hits the server with the new cookie (read by createTRPCContext)
+    // and brings back data scoped to the newly selected location. Also refresh
+    // server components in case any admin layout reads the cookie on the server.
+    queryClient.invalidateQueries();
+    router.refresh();
   };
 
   return (
