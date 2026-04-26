@@ -20,6 +20,7 @@ import {
   PlusIcon,
   SearchIcon,
   Trash2Icon,
+  UserIcon,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -30,8 +31,42 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const ACTIVE_LOCATION_COOKIE = "jeff_active_location_id";
+
+type ServiceKind =
+  | "tattoo"
+  | "piercing"
+  | "touchup"
+  | "removal"
+  | "consultation"
+  | "other";
+
+// Per-cart-line service attachment intent. Resolved AFTER orders.create
+// succeeds: we map each created order_item back to its productId and call
+// services.attachToOrderItem. This is post-sale enrichment and never blocks
+// the POS confirm flow — failure to attach surfaces as a toast, never as a
+// rolled-back sale.
+type ServiceIntent = {
+  staffMemberId: number;
+  serviceKind: ServiceKind;
+  bodyLocation?: string;
+};
 
 type CartItem = {
   productId: number;
@@ -39,7 +74,17 @@ type CartItem = {
   unitPrice: number;
   onHand: number;
   quantity: number;
+  service?: ServiceIntent;
 };
+
+const SERVICE_KINDS: ServiceKind[] = [
+  "tattoo",
+  "piercing",
+  "touchup",
+  "removal",
+  "consultation",
+  "other",
+];
 
 type PaymentLine = {
   paymentMethodId: number | null;
@@ -76,10 +121,15 @@ export default function POSPage() {
 
   const customersQuery = useQuery(trpc.customers.list.queryOptions());
   const paymentMethodsQuery = useQuery(trpc.paymentMethods.list.queryOptions());
+  const staffQuery = useQuery(trpc.staff.list.queryOptions());
+
+  const attachServiceMutation = useMutation(
+    trpc.services.attachToOrderItem.mutationOptions(),
+  );
 
   const createOrderMutation = useMutation(
     trpc.orders.create.mutationOptions({
-      onSuccess: (order) => {
+      onSuccess: async (order) => {
         queryClient.invalidateQueries(trpc.orders.list.queryOptions());
         queryClient.invalidateQueries(
           trpc.inventory.balancesByLocation.queryOptions({
@@ -94,6 +144,41 @@ export default function POSPage() {
         toast.success(
           `Order #${order.id} created — total $${(order.total_amount / 100).toFixed(2)}`,
         );
+
+        // Post-sale service attachment. Done after orders.create succeeds so
+        // the POS confirm path stays atomic and unbroken; attach failures
+        // surface as toasts and never roll back the sale.
+        const intents = cart
+          .map((c) => {
+            if (!c.service) return null;
+            const orderItem = order.items.find(
+              (it) => it.product_id === c.productId,
+            );
+            if (!orderItem) return null;
+            return {
+              orderItemId: orderItem.id,
+              ...c.service,
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => x != null);
+
+        for (const intent of intents) {
+          try {
+            await attachServiceMutation.mutateAsync({
+              orderItemId: intent.orderItemId,
+              staffMemberId: intent.staffMemberId,
+              serviceKind: intent.serviceKind,
+              bodyLocation: intent.bodyLocation || undefined,
+            });
+          } catch (e) {
+            toast.error(
+              `Service attach failed for item ${intent.orderItemId}: ${
+                e instanceof Error ? e.message : "unknown error"
+              }`,
+            );
+          }
+        }
+
         setCart([]);
         setSelectedCustomerId(null);
         setPaymentLines([{ paymentMethodId: null, amount: 0 }]);
@@ -110,6 +195,15 @@ export default function POSPage() {
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([
     { paymentMethodId: null, amount: 0 },
   ]);
+
+  const [serviceDialogProductId, setServiceDialogProductId] = useState<
+    number | null
+  >(null);
+  const [serviceForm, setServiceForm] = useState<{
+    staffMemberId: string;
+    serviceKind: ServiceKind;
+    bodyLocation: string;
+  }>({ staffMemberId: "", serviceKind: "tattoo", bodyLocation: "" });
 
   const balances = balancesQuery.data ?? [];
   const filteredBalances = useMemo(() => {
@@ -190,6 +284,39 @@ export default function POSPage() {
 
   const handleRemove = (productId: number) =>
     setCart((prev) => prev.filter((c) => c.productId !== productId));
+
+  const openServiceDialog = (productId: number) => {
+    const existing = cart.find((c) => c.productId === productId)?.service;
+    setServiceForm({
+      staffMemberId: existing ? String(existing.staffMemberId) : "",
+      serviceKind: existing?.serviceKind ?? "tattoo",
+      bodyLocation: existing?.bodyLocation ?? "",
+    });
+    setServiceDialogProductId(productId);
+  };
+
+  const saveServiceIntent = () => {
+    if (serviceDialogProductId == null) return;
+    if (!serviceForm.staffMemberId) {
+      toast.error("Pick a staff member");
+      return;
+    }
+    setCart((prev) =>
+      prev.map((c) =>
+        c.productId === serviceDialogProductId
+          ? {
+              ...c,
+              service: {
+                staffMemberId: Number(serviceForm.staffMemberId),
+                serviceKind: serviceForm.serviceKind,
+                bodyLocation: serviceForm.bodyLocation.trim() || undefined,
+              },
+            }
+          : c,
+      ),
+    );
+    setServiceDialogProductId(null);
+  };
 
   const updatePaymentLine = (index: number, patch: Partial<PaymentLine>) =>
     setPaymentLines((prev) =>
@@ -376,13 +503,28 @@ export default function POSPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemove(c.productId)}
-                        >
-                          <Trash2Icon className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant={c.service ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => openServiceDialog(c.productId)}
+                            title={
+                              c.service
+                                ? "Service attached — click to edit"
+                                : "Attach service performer"
+                            }
+                          >
+                            <UserIcon className="h-3 w-3 mr-1" />
+                            {c.service ? "Servicio" : "+ Servicio"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemove(c.productId)}
+                          >
+                            <Trash2Icon className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -466,6 +608,83 @@ export default function POSPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog
+        open={serviceDialogProductId != null}
+        onOpenChange={(open) => !open && setServiceDialogProductId(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Quien realizó este servicio?</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-4">
+            <div className="grid gap-2">
+              <Label>Staff</Label>
+              <Select
+                value={serviceForm.staffMemberId}
+                onValueChange={(v) =>
+                  setServiceForm((s) => ({ ...s, staffMemberId: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pick a staff member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(staffQuery.data ?? []).map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.display_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Service kind</Label>
+              <Select
+                value={serviceForm.serviceKind}
+                onValueChange={(v) =>
+                  setServiceForm((s) => ({
+                    ...s,
+                    serviceKind: v as ServiceKind,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SERVICE_KINDS.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {k}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Body location (optional)</Label>
+              <Input
+                value={serviceForm.bodyLocation}
+                onChange={(e) =>
+                  setServiceForm((s) => ({
+                    ...s,
+                    bodyLocation: e.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setServiceDialogProductId(null)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveServiceIntent}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -32,6 +32,9 @@ import {
   ReceiptIcon,
   TruckIcon,
   ShoppingBasketIcon,
+  UserIcon,
+  MonitorIcon,
+  ClockIcon,
   MenuIcon,
   XIcon,
   type LucideIcon,
@@ -57,6 +60,9 @@ const navItems: NavItem[] = [
   { href: "/admin/expenses", label: "Expenses", icon: ReceiptIcon },
   { href: "/admin/suppliers", label: "Suppliers", icon: TruckIcon },
   { href: "/admin/purchases", label: "Purchases", icon: ShoppingBasketIcon },
+  { href: "/admin/staff", label: "Staff", icon: UserIcon },
+  { href: "/admin/workstations", label: "Workstations", icon: MonitorIcon },
+  { href: "/admin/station-rentals", label: "Station rentals", icon: ClockIcon },
   { href: "/admin/pos", label: "Point of Sale", icon: ShoppingCartIcon },
 ];
 
