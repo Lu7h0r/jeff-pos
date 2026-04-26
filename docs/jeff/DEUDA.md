@@ -95,8 +95,8 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | DA-7 | `schema.ts products.business_id` | media | Batch 4 (backfill + NOT NULL) | cerrada |
 | DA-8 | `orders.update` mutation | media | Batch 5 | cerrada |
 | DA-9 | `paymentMethods` lacks is_cash flag | baja | TBD (futuro batch payment-methods) | abierta |
-| DA-10 | `orders.status` legacy column | baja | post-Batch 6 cleanup | abierta |
-| DA-11 | `transactions` row paralelo en orders.create | media | post-Batch 6 cleanup | abierta |
+| DA-10 | `orders.status` legacy column | baja | post-Batch 6 cleanup | cerrada |
+| DA-11 | `transactions` row paralelo en orders.create | media | post-Batch 6 cleanup | cerrada |
 | DA-12 | weighted-average cost no implementado | media | TBD (post-pilot real) | abierta |
 | DA-13 | `purchases.cancel` con sesion cerrada sin reversa | media | TBD | abierta |
 | DA-14 | `expense_entries` sin void | media | TBD | abierta |
@@ -179,7 +179,7 @@ Recomendacion: opcion 2. El reporte de `dashboard.stats` puede separar mejor por
 3. UPDATE bulk de rows existentes (NULL them).
 4. Drop column en proxima migracion (cuando se decida usar Drizzle migrate formal).
 
-**Estado:** abierta. No-bloqueante.
+**Estado:** cerrada. Cleanup batch elimina la columna `status` de `orders` en `schema.ts`, retira el insert/select desde `orders.create/list/get/void/editNotes`, limpia `seed.ts` y los tests de `orders.test.ts` + `dashboard.test.ts`. `grep -rn 'orders\.status\|order\.status' src/` solo deja referencias a `purchaseOrders.status` (no relacionadas).
 
 ## DA-11 — `transactions` row paralelo en `orders.create`
 
@@ -198,7 +198,7 @@ Recomendacion: opcion 2. El reporte de `dashboard.stats` puede separar mejor por
 
 Recomendacion: A. La eliminacion incluye drop column `payment_method_id` en transactions, drop FKs, drop tabla, ajustar tests.
 
-**Estado:** abierta. No-bloqueante. Bloqueante para perf si Jeff opera muchas ventas/dia (cada venta hace 2x writes redundantes).
+**Estado:** cerrada. Cleanup batch elimina la tabla `transactions` por completo: drop del `pgTable`/relations en `schema.ts`, baja del `transactionsRouter` (router + tests), retiro del insert paralelo en `orders.create`, limpieza del seed y de `helpers.ts:TABLES`. `grep -rn 'transactions' src/` queda vacio; `db.transaction(...)` (Drizzle atomic API) se conserva, no relacionado.
 
 ## DA-12 — Weighted-average cost no implementado en `purchases.receive`
 
