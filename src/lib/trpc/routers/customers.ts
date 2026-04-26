@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { protectedProcedure, router } from "../init";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 
 const customerSchema = z.object({
   id: z.number(),
@@ -11,16 +11,37 @@ const customerSchema = z.object({
   phone: z.string().nullable(),
   status: z.string().nullable(),
   user_uid: z.string(),
+  business_id: z.number().nullable(),
   created_at: z.date().nullable(),
 });
 
 export const customersRouter = router({
+  // List customers visible to the user. When an active business is resolved
+  // (Batch 1.5+), customers belonging to that business are visible OR
+  // (legacy fallback) customers created by the user via user_uid. When no
+  // active business is set, falls back to user_uid only — preserves
+  // pre-business behaviour for tests and for users without membership.
   list: protectedProcedure
     .meta({ openapi: { method: "GET", path: "/customers", tags: ["Customers"], summary: "List all customers" } })
     .input(z.void())
     .output(z.array(customerSchema))
     .query(async ({ ctx }) => {
-      return db.select().from(customers).where(eq(customers.user_uid, ctx.user.id));
+      if (ctx.activeBusinessId != null) {
+        return db
+          .select()
+          .from(customers)
+          .where(
+            or(
+              eq(customers.business_id, ctx.activeBusinessId),
+              eq(customers.user_uid, ctx.user.id),
+            ),
+          );
+      }
+
+      return db
+        .select()
+        .from(customers)
+        .where(eq(customers.user_uid, ctx.user.id));
     }),
 
   create: protectedProcedure
@@ -37,7 +58,11 @@ export const customersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const [data] = await db
         .insert(customers)
-        .values({ ...input, user_uid: ctx.user.id })
+        .values({
+          ...input,
+          user_uid: ctx.user.id,
+          business_id: ctx.activeBusinessId ?? null,
+        })
         .returning();
       return data;
     }),
