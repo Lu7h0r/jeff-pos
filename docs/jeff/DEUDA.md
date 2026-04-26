@@ -18,7 +18,7 @@ Cada item indica:
 
 **Resolucion:** Batch 4. `orders.create` recalcula total leyendo precios desde `products` por `id` dentro de la misma transaccion. El `input.total` se acepta solo como hint para validacion contra el calculo servidor (mismatch = error).
 
-**Estado:** abierta. No usar en produccion real hasta cierre de Batch 4.
+**Estado:** cerrada. Commit `9f0854f` (Batch 4) reescribe `orders.create` como transaccion atomica que computa `total = sum(unit_price * quantity)` leyendo desde DB, ignorando cualquier total del cliente. Validacion `sum(paymentLines.amount) === computed_total` o BAD_REQUEST.
 
 ## DA-2 — `orders.create` nunca descuenta stock
 
@@ -28,7 +28,7 @@ Cada item indica:
 
 **Resolucion:** Batch 3 introduce `inventory_balances` + `inventory_movements`. Batch 4 hace que `orders.create` cree movimientos `sale` y actualice `inventory_balances` dentro de la misma transaccion DB que crea la orden, validando `quantity_on_hand >= requested` con condicion atomica para evitar stock negativo por carrera.
 
-**Estado:** abierta. No tomar decisiones operativas basadas en `in_stock` actual.
+**Estado:** cerrada. Commit `9f0854f` (Batch 4) implementa el `UPDATE inventory_balances SET quantity_on_hand = quantity_on_hand - :qty WHERE id = :id AND quantity_on_hand >= :qty RETURNING *` con guarda atomica. Si returning vacio, throw CONFLICT "Insufficient stock". `orders.create` crea fila `inventory_movements` type=`sale` por cada linea, source_type=`order`, source_id=order.id. `products.in_stock` legacy queda sin actualizar — es decorativo y se elimina en futuro batch de cleanup.
 
 ## DA-3 — `orders.delete` tiene FK bug con transactions
 
@@ -43,12 +43,13 @@ Cada item indica:
 - `orders.process_status` agrega valor `void`.
 - `orders.voidance_reason` text nullable.
 - `orders.voided_at` timestamp nullable.
+- `orders.voided_by_user_id` text nullable, FK a user.
 - mutation tRPC `orders.void` marca la orden, crea `inventory_movements` reverso (devuelve stock al local), crea `cash_movements` reverso (revierte efecto en caja del turno).
 - la fila nunca se borra. Se mantiene para auditoria contable.
 
 La UI cambia "Borrar venta" → "Anular venta" con motivo obligatorio.
 
-**Estado:** abierta. Se cierra con la implementacion de void en Batch 4.
+**Estado:** cerrada. Commit `9f0854f` (Batch 4) elimina `orders.delete` completamente y agrega `orders.void` con mutation que en una sola transaccion: marca process_status=`void`, registra voidance_reason+voided_at+voided_by_user_id, crea inventory_movements reverso (type=`adjustment`, quantity_delta positivo, source_type=`order_void`), crea cash_movements reverso (type=`refund`, amount negativo, transaction_type=`negative`). Rejection: void en orden ya void = CONFLICT, void en cash_session cerrada = CONFLICT con mensaje guia.
 
 ## DA-4 — `customers` no tiene `business_id`
 
@@ -63,7 +64,7 @@ La UI cambia "Borrar venta" → "Anular venta" con motivo obligatorio.
 
 **Estado:** mitigada a nivel query.
 
-**Cerrado parcial:** commit `26a3fe0` (Batch 1) agrega columna nullable. Commits `7a215ae` + `a392abf` (Batch 1.5) introducen `resolveActiveContext` y migran `customers.list`/`customers.create` a usar `ctx.activeBusinessId` con fallback `user_uid`. Pendiente final: backfill de datos existentes y NOT NULL en Batch 3 cuando inventory exista y los datos legacy se puedan migrar coherentemente.
+**Cerrado parcial:** commit `26a3fe0` (Batch 1) agrega columna nullable. Commits `7a215ae` + `a392abf` (Batch 1.5) introducen `resolveActiveContext` y migran `customers.list`/`customers.create` a usar `ctx.activeBusinessId` con fallback `user_uid`. Pendiente final: backfill de datos existentes y NOT NULL en futuro batch (no urgente; el filter OR funciona bien para datos legacy).
 
 ## DA-5 — `paymentMethods` no tiene scope de negocio
 
@@ -85,13 +86,15 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 
 | ID | Ubicacion | Severidad | Batch resolucion | Estado |
 |---|---|---|---|---|
-| DA-1 | `orders.ts:54` | alta | Batch 4 | abierta |
-| DA-2 | `orders.ts` create flow | alta | Batch 3 (schema) + Batch 4 (descuento) | schema listo, descuento abierto |
-| DA-3 | `orders.ts:123-133` | media | Batch 4 (via void) | abierta |
+| DA-1 | `orders.ts:54` | alta | Batch 4 | cerrada |
+| DA-2 | `orders.ts` create flow | alta | Batch 3 (schema) + Batch 4 (descuento) | cerrada |
+| DA-3 | `orders.ts:123-133` | media | Batch 4 (via void) | cerrada |
 | DA-4 | `schema.ts customers` | media | Batch 1 + Batch 1.5 | mitigada (query layer) |
 | DA-5 | `schema.ts paymentMethods` | baja | Batch 1 + Batch 1.5 | cerrada (query layer) |
 | DA-6 | `schema.ts inventoryBalances` | media | post-PGlite (PostgreSQL real) | abierta |
-| DA-7 | `schema.ts products.business_id` | media | Batch 4 (backfill + NOT NULL) | abierta |
+| DA-7 | `schema.ts products.business_id` | media | Batch 4 (backfill + NOT NULL) | cerrada |
+| DA-8 | `orders.update` mutation | media | Batch 5 (dashboard refactor) | abierta |
+| DA-9 | `paymentMethods` lacks is_cash flag | baja | TBD (futuro batch payment-methods) | abierta |
 
 ## DA-6 — `inventory_balances` sin UNIQUE compound
 
@@ -121,7 +124,42 @@ Hoy es bug latente: PGlite es single-process, no hay concurrencia real. Cuando s
 2. Cambiar la columna a `NOT NULL`.
 3. Validar en `orders.create` que `product.business_id == ctx.activeBusinessId`.
 
-**Estado:** abierta. Transicional por diseno (Batch 3 dejo nullable a proposito para no romper demo seed).
+**Estado:** cerrada. Commit `71d94d3` cambia schema a `NOT NULL`. Commit `3f4ae9e` actualiza `seed.ts` (demo) para crear "Demo Business" + membership + location, y assignar todos los productos/customers/orders al business. `orders.create` valida `product.business_id === ctx.activeBusinessId` o falla. Migracion break: hay que correr `rm -rf data/pglite && bun run dev` para recrear la DB local (acceptable porque Jeff no esta deployado).
+
+## DA-8 — `orders.update` es escape hatch sin audit trail
+
+**Ubicacion:** `src/lib/trpc/routers/orders.ts`, mutation `orders.update`. Sobrevive en Batch 4 como opcion partial admin para mantener vivo el modal de edicion en `src/app/admin/orders/page.tsx`.
+
+**Impacto:** un usuario miembro del business puede modificar `status` (legacy), `total_amount` u otros campos de cualquier orden via UI sin que quede registro de quien lo hizo ni cuando ni por que. Bypassa el state machine de `process_status` (pending/ongoing/complete/void) que `orders.create` y `orders.void` enforzan correctamente. Riesgo contable: alguien puede editar el total de una venta cerrada y desbalancear la caja del dia.
+
+**Resolucion:** Batch 5 (dashboard refactor) o batch dedicado a admin orders. Reemplazar `orders.update` con mutations explicitas y auditables:
+
+- `orders.editNotes` (solo notes, registrar editor + timestamp)
+- `orders.markPartialPayment` (cambiar payment_status a partially_paid agregando un order_payment con motivo)
+- eliminar la edicion de `total_amount` y `status` legacy desde UI; cualquier cambio de monto/estado pasa por void + nueva venta.
+
+Cuando dashboard.stats migre a leer `process_status` en lugar de `status` legacy, se puede retirar el modal de edicion de admin/orders y matar `orders.update` de raiz.
+
+**Estado:** abierta. Bug pasivo mientras nadie use el modal de edicion en produccion.
+
+## DA-9 — `paymentMethods` carece de flag `is_cash` o taxonomia tipada
+
+**Ubicacion:** `src/lib/trpc/routers/orders.ts`, en el flow de `orders.create` y `orders.void`. Para decidir si un payment va a `cash_sessions.expected_cash_amount` vs `expected_digital_amount`, el codigo infiere por nombre del metodo:
+
+```ts
+const isCash = paymentMethod.name.toLowerCase().includes("cash");
+```
+
+**Impacto:** funciona para los seeds actuales (`Cash`, `Credit Card`, `Debit Card`) y para los que el seed jeff cree. Pero cuando el operador real cree un metodo "Efectivo", "Caja chica", "Plata en mano", el inferidor falla y todos los pagos en efectivo van a digital. Caja del dia se desbalancea silenciosamente.
+
+**Resolucion:** futuro batch (idealmente cuando se implemente CRUD propio de payment_methods con UI). Opciones:
+
+1. Agregar columna `is_cash` boolean (simple, retrocompatible).
+2. Reemplazar por `kind` enum: `cash | card | transfer | other` (mas extensible, mejor para reportes).
+
+Recomendacion: opcion 2. El reporte de `dashboard.stats` puede separar mejor por kind.
+
+**Estado:** abierta. No-bloqueante mientras el seed controle los nombres. Critico antes de dejar a Jeff crear payment methods libremente.
 
 ## Convencion de cierre
 
