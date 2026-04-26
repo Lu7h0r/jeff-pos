@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { MapPinIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +30,7 @@ function writeCookie(id: number): void {
 }
 
 export function LocationSelector() {
+  const t = useTranslations("locationSelector");
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -80,7 +82,7 @@ export function LocationSelector() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Local activo</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("active")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {locations.map((loc) => (
           <DropdownMenuItem

@@ -150,8 +150,8 @@ export async function seedJeff(): Promise<void> {
   ];
 
   // Service products are intangible — no inventory balance and no SKU. They
-  // are matched idempotently by name within the business. Prices are stored
-  // as cents (matches the rest of the catalogue) so 200_000_00 = COP 200.000.
+  // are matched idempotently by name within the business. Prices are whole
+  // Colombian pesos (COP has no minor units in practice): 200_000 = $200.000.
   const sampleServices: Array<{
     name: string;
     price: number;
@@ -163,10 +163,10 @@ export async function seedJeff(): Promise<void> {
       | "consultation"
       | "other";
   }> = [
-    { name: "Sesion tatuaje pequeño (1h)", price: 200_000_00, defaultServiceKind: "tattoo" },
-    { name: "Sesion tatuaje mediano (3h)", price: 500_000_00, defaultServiceKind: "tattoo" },
-    { name: "Piercing oreja (estandar)", price: 80_000_00, defaultServiceKind: "piercing" },
-    { name: "Touchup tatuaje", price: 100_000_00, defaultServiceKind: "touchup" },
+    { name: "Sesión tatuaje pequeño (1h)", price: 200_000, defaultServiceKind: "tattoo" },
+    { name: "Sesión tatuaje mediano (3h)", price: 500_000, defaultServiceKind: "tattoo" },
+    { name: "Piercing oreja (estándar)", price: 80_000, defaultServiceKind: "piercing" },
+    { name: "Retoque tatuaje", price: 100_000, defaultServiceKind: "touchup" },
     { name: "Consulta diseño tatuaje", price: 0, defaultServiceKind: "consultation" },
   ];
 
@@ -347,12 +347,12 @@ export async function seedJeff(): Promise<void> {
     }> = [
       {
         categoryName: "Arriendo",
-        amount: 1_430_000_00,
+        amount: 1_430_000,
         description: "Arriendo Amparo (mes corriente)",
       },
       {
         categoryName: "Servicios",
-        amount: 230_000_00,
+        amount: 230_000,
         description: "Luz Amparo (mes corriente)",
       },
     ];
@@ -629,7 +629,7 @@ export async function seedJeff(): Promise<void> {
         location_id: amparo.id,
         workstation_id: cabina1Id,
         staff_member_id: sampleArtistId,
-        amount: 50_000_00,
+        amount: 50_000,
         start_at: startAt,
         end_at: endAt,
         status: "scheduled",

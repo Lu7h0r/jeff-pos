@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useTRPC } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,26 +49,26 @@ import { LocationSelector } from "@/components/location-selector";
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
 }
 
 const navItems: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboardIcon },
-  { href: "/admin/cashier", label: "Cashier", icon: DollarSignIcon },
-  { href: "/admin/products", label: "Products", icon: PackageIcon },
-  { href: "/admin/inventory", label: "Inventory", icon: WarehouseIcon },
-  { href: "/admin/customers", label: "Customers", icon: UsersIcon },
-  { href: "/admin/orders", label: "Orders", icon: ShoppingBagIcon },
-  { href: "/admin/payment-methods", label: "Payment Methods", icon: CreditCardIcon },
-  { href: "/admin/expenses", label: "Expenses", icon: ReceiptIcon },
-  { href: "/admin/suppliers", label: "Suppliers", icon: TruckIcon },
-  { href: "/admin/purchases", label: "Purchases", icon: ShoppingBasketIcon },
-  { href: "/admin/staff", label: "Staff", icon: UserIcon },
-  { href: "/admin/workstations", label: "Workstations", icon: MonitorIcon },
-  { href: "/admin/station-rentals", label: "Station rentals", icon: ClockIcon },
-  { href: "/admin/pos", label: "Point of Sale", icon: ShoppingCartIcon },
-  { href: "/admin/team", label: "Team", icon: UsersRoundIcon },
+  { href: "/admin", labelKey: "dashboard", icon: LayoutDashboardIcon },
+  { href: "/admin/cashier", labelKey: "cashier", icon: DollarSignIcon },
+  { href: "/admin/products", labelKey: "products", icon: PackageIcon },
+  { href: "/admin/inventory", labelKey: "inventory", icon: WarehouseIcon },
+  { href: "/admin/customers", labelKey: "customers", icon: UsersIcon },
+  { href: "/admin/orders", labelKey: "orders", icon: ShoppingBagIcon },
+  { href: "/admin/payment-methods", labelKey: "paymentMethods", icon: CreditCardIcon },
+  { href: "/admin/expenses", labelKey: "expenses", icon: ReceiptIcon },
+  { href: "/admin/suppliers", labelKey: "suppliers", icon: TruckIcon },
+  { href: "/admin/purchases", labelKey: "purchases", icon: ShoppingBasketIcon },
+  { href: "/admin/staff", labelKey: "staff", icon: UserIcon },
+  { href: "/admin/workstations", labelKey: "workstations", icon: MonitorIcon },
+  { href: "/admin/station-rentals", labelKey: "stationRentals", icon: ClockIcon },
+  { href: "/admin/pos", labelKey: "pos", icon: ShoppingCartIcon },
+  { href: "/admin/team", labelKey: "team", icon: UsersRoundIcon },
 ];
 
 // Visual gate by role. The backend `requireRole` middleware is the security
@@ -92,11 +93,9 @@ const NAV_BY_ROLE: Record<string, ReadonlySet<string>> = {
   viewer: new Set(["/admin"]),
 };
 
-const pageNames: Record<string, string> = Object.fromEntries(
-  navItems.map((item) => [item.href, item.label])
-);
-
 export function AdminLayout({ children }: { children: React.ReactNode }) {
+  const tNav = useTranslations("nav");
+  const tLayout = useTranslations("layout");
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const trpc = useTRPC();
@@ -110,6 +109,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     return navItems.filter((item) => allowed.has(item.href));
   }, [role]);
 
+  const pageTitle =
+    navItems.find((item) => item.href === pathname)?.labelKey ?? null;
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background px-3 sm:px-4 sm:gap-4">
@@ -120,16 +122,18 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           onClick={() => setMobileMenuOpen(true)}
         >
           <MenuIcon className="h-5 w-5" />
-          <span className="sr-only">Open menu</span>
+          <span className="sr-only">{tLayout("openMenu")}</span>
         </Button>
         <Link
           href="/admin"
           className="hidden sm:flex items-center gap-2 text-lg font-semibold"
         >
           <Package2Icon className="h-6 w-6" />
-          <span className="sr-only">Admin Panel</span>
+          <span className="sr-only">{tLayout("adminPanel")}</span>
         </Link>
-        <h1 className="text-lg sm:text-xl font-bold truncate">{pageNames[pathname]}</h1>
+        <h1 className="text-lg sm:text-xl font-bold truncate">
+          {pageTitle ? tNav(pageTitle) : ""}
+        </h1>
         <div className="ml-auto flex items-center gap-2">
           <LocationSelector />
           <DropdownMenu>
@@ -143,18 +147,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                   src="/placeholder-user.jpg"
                   width={36}
                   height={36}
-                  alt="Avatar"
+                  alt={tLayout("avatar")}
                   className="overflow-hidden rounded-full"
                 />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>{tLayout("myAccount")}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuItem>{tLayout("settings")}</DropdownMenuItem>
+              <DropdownMenuItem>{tLayout("support")}</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => logout()}>Logout</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => logout()}>
+                {tLayout("logout")}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -185,7 +191,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 <XIcon className="h-5 w-5" />
               </Button>
             </div>
-            {visibleNavItems.map(({ href, label, icon: Icon }) => (
+            {visibleNavItems.map(({ href, labelKey, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
@@ -197,7 +203,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                {label}
+                {tNav(labelKey)}
               </Link>
             ))}
           </nav>
@@ -208,7 +214,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <aside className="fixed mt-[56px] inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-background sm:flex">
           <nav className="flex flex-col items-center gap-4 px-2 sm:py-5">
             <TooltipProvider>
-              {visibleNavItems.map(({ href, label, icon: Icon }) => (
+              {visibleNavItems.map(({ href, labelKey, icon: Icon }) => (
                 <Tooltip key={href}>
                   <TooltipTrigger asChild>
                     <Link
@@ -220,10 +226,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                       } transition-colors hover:text-foreground md:h-8 md:w-8`}
                     >
                       <Icon className="h-5 w-5" />
-                      <span className="sr-only">{label}</span>
+                      <span className="sr-only">{tNav(labelKey)}</span>
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="right">{label}</TooltipContent>
+                  <TooltipContent side="right">{tNav(labelKey)}</TooltipContent>
                 </Tooltip>
               ))}
             </TooltipProvider>

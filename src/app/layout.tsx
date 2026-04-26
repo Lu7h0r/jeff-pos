@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { TRPCReactProvider } from "@/components/trpc-provider";
 import "./globals.css";
 
@@ -11,11 +13,14 @@ export const metadata: Metadata = {
   description: "Open-source point of sale system",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
     // suppressHydrationWarning on <html> and <body> silences the noisy
     // "tree hydrated but some attributes didn't match" error caused by
@@ -23,12 +28,14 @@ export default function RootLayout({
     // attributes like __processed_* or bis_register into <body> before
     // React hydrates. Only suppresses warnings on these two roots, not
     // on app components.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="es-CO" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        <TRPCReactProvider>
-          <main>{children}</main>
-          <Toaster richColors position="bottom-right" />
-        </TRPCReactProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <TRPCReactProvider>
+            <main>{children}</main>
+            <Toaster richColors position="bottom-right" />
+          </TRPCReactProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
