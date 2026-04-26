@@ -664,6 +664,76 @@ describe("orders.void", () => {
   });
 });
 
+describe("orders.editNotes — replaces retired orders.update (DA-8)", () => {
+  it("updates only the notes field", async () => {
+    const order = await jeffCaller().create({
+      locationId: amparoId,
+      items: [{ productId: pinkProductId, quantity: 1 }],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 1_000 }],
+      notes: "initial",
+    });
+
+    const updated = await jeffCaller().editNotes({
+      orderId: order.id,
+      notes: "edited via editNotes",
+    });
+
+    expect(updated.notes).toBe("edited via editNotes");
+
+    const [persisted] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, order.id));
+    expect(persisted.notes).toBe("edited via editNotes");
+  });
+
+  it("does not change status, process_status, payment_status or total_amount", async () => {
+    const order = await jeffCaller().create({
+      locationId: amparoId,
+      items: [{ productId: pinkProductId, quantity: 2 }],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 2_000 }],
+    });
+
+    const beforeRow = (
+      await db.select().from(schema.orders).where(eq(schema.orders.id, order.id))
+    )[0];
+
+    await jeffCaller().editNotes({
+      orderId: order.id,
+      notes: "notes only — must not bleed into other columns",
+    });
+
+    const afterRow = (
+      await db.select().from(schema.orders).where(eq(schema.orders.id, order.id))
+    )[0];
+
+    expect(afterRow.total_amount).toBe(beforeRow.total_amount);
+    expect(afterRow.status).toBe(beforeRow.status);
+    expect(afterRow.payment_status).toBe(beforeRow.payment_status);
+    expect(afterRow.process_status).toBe(beforeRow.process_status);
+    expect(afterRow.business_id).toBe(beforeRow.business_id);
+    expect(afterRow.location_id).toBe(beforeRow.location_id);
+    expect(afterRow.cash_session_id).toBe(beforeRow.cash_session_id);
+    expect(afterRow.customer_id).toBe(beforeRow.customer_id);
+  });
+
+  it("rejects when caller is not a member of the order's business (FORBIDDEN)", async () => {
+    const order = await jeffCaller().create({
+      locationId: amparoId,
+      items: [{ productId: pinkProductId, quantity: 1 }],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 1_000 }],
+    });
+
+    await expect(
+      otherCaller().editNotes({ orderId: order.id, notes: "outsider note" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" } satisfies Partial<TRPCError>);
+
+    await expect(
+      orphanCaller().editNotes({ orderId: order.id, notes: "no membership" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" } satisfies Partial<TRPCError>);
+  });
+});
+
 describe("orders.list and orders.get", () => {
   it("orders.list scopes by business_id (does not leak across businesses)", async () => {
     // Seed an order for u-other at otherLocation
