@@ -10,7 +10,7 @@ import {
   locationMembers,
   locations,
 } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 const ROLES = ["owner", "manager", "cashier", "artist", "viewer"] as const;
 const roleSchema = z.enum(ROLES);
@@ -421,29 +421,59 @@ export const teamRouter = router({
       const businessId = requireBusiness(ctx.activeBusinessId);
 
       if (input.type === "business") {
-        const [row] = await db
-          .select()
-          .from(businessMembers)
-          .where(eq(businessMembers.id, input.membershipId))
-          .limit(1);
-        if (!row || row.business_id !== businessId) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Membership not found",
-          });
-        }
-        const [updated] = await db
-          .update(businessMembers)
-          .set({ status: "removed" })
-          .where(eq(businessMembers.id, row.id))
-          .returning();
-        return {
-          type: "business" as const,
-          membershipId: updated.id,
-          status: updated.status,
-        };
+        // DA-24: count-then-decide on the owners of the same business needs
+        // to be atomic with the status="removed" write to avoid a TOCTOU
+        // race where two concurrent archives could both see N=2 and both
+        // commit, leaving the business with zero owners.
+        return await db.transaction(async (tx) => {
+          const [row] = await tx
+            .select()
+            .from(businessMembers)
+            .where(eq(businessMembers.id, input.membershipId))
+            .limit(1);
+          if (!row || row.business_id !== businessId) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Membership not found",
+            });
+          }
+
+          if (row.role === "owner" && row.status === "active") {
+            const [{ count: ownerCount }] = await tx
+              .select({ count: sql<number>`count(*)::int` })
+              .from(businessMembers)
+              .where(
+                and(
+                  eq(businessMembers.business_id, row.business_id),
+                  eq(businessMembers.role, "owner"),
+                  eq(businessMembers.status, "active"),
+                ),
+              );
+            if (Number(ownerCount) <= 1) {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message:
+                  "Cannot archive the last active owner of this business",
+              });
+            }
+          }
+
+          const [updated] = await tx
+            .update(businessMembers)
+            .set({ status: "removed" })
+            .where(eq(businessMembers.id, row.id))
+            .returning();
+          return {
+            type: "business" as const,
+            membershipId: updated.id,
+            status: updated.status,
+          };
+        });
       }
 
+      // location_members archive can always proceed — granular roles aren't
+      // critical for business continuity. Cross-business safety is handled
+      // by the business_id assertion below.
       const [row] = await db
         .select()
         .from(locationMembers)
