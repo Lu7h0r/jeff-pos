@@ -1,5 +1,5 @@
 import { mock, describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { createTestDb, makeUser, SCHEMA_DDL } from "./helpers";
+import { createTestDb, makeContext, SCHEMA_DDL } from "./helpers";
 
 const { pg, db } = createTestDb();
 mock.module("@/lib/db", () => ({ db, pglite: pg }));
@@ -7,9 +7,9 @@ mock.module("@/lib/db", () => ({ db, pglite: pg }));
 const { customersRouter } = await import("../customers");
 const { createCallerFactory } = await import("../../init");
 
-const caller = createCallerFactory(customersRouter)({ user: makeUser("user-1") });
+const caller = createCallerFactory(customersRouter)(makeContext("user-1"));
 const callerAs = (uid: string) =>
-  createCallerFactory(customersRouter)({ user: makeUser(uid) });
+  createCallerFactory(customersRouter)(makeContext(uid));
 
 beforeAll(async () => { await pg.exec(SCHEMA_DDL); });
 afterAll(async () => { await pg.close(); });

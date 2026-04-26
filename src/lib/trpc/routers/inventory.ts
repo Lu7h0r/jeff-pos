@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import {
   inventoryBalances,
@@ -129,7 +130,7 @@ export const inventoryRouter = router({
       return rows;
     }),
 
-  adjust: protectedProcedure
+  adjust: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -239,7 +240,7 @@ export const inventoryRouter = router({
       });
     }),
 
-  transfer: protectedProcedure
+  transfer: ownerOrManager
     .meta({
       openapi: {
         method: "POST",

@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import {
   stationRentals,
@@ -105,7 +106,7 @@ export const stationRentalsRouter = router({
       return rows.map(rowToOutput);
     }),
 
-  create: protectedProcedure
+  create: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -309,7 +310,7 @@ export const stationRentalsRouter = router({
       });
     }),
 
-  markCompleted: protectedProcedure
+  markCompleted: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -337,7 +338,7 @@ export const stationRentalsRouter = router({
       return rowToOutput(updated);
     }),
 
-  cancel: protectedProcedure
+  cancel: ownerOrManager
     .meta({
       openapi: {
         method: "POST",

@@ -1,6 +1,6 @@
 import { mock, describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { TRPCError } from "@trpc/server";
-import { createTestDb, makeUser, SCHEMA_DDL } from "./helpers";
+import { createTestDb, makeContext, SCHEMA_DDL } from "./helpers";
 
 const { pg, db } = createTestDb();
 mock.module("@/lib/db", () => ({ db, pglite: pg }));
@@ -10,7 +10,10 @@ const { createCallerFactory } = await import("../../init");
 const schema = await import("@/lib/db/schema");
 
 const caller = createCallerFactory(cashSessionsRouter);
-const callerAs = (uid: string) => caller({ user: makeUser(uid) });
+// makeContext defaults role to "owner" so operationalRole guards on
+// cashSessions.open/close pass for happy-path tests; FORBIDDEN coverage
+// still triggers from assertLocationAccess for users with no membership.
+const callerAs = (uid: string) => caller(makeContext(uid));
 
 let bizJeffId: number;
 let bizOtherId: number;

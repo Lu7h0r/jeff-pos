@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { operationalRole } from "../role-guards";
 import { db } from "@/lib/db";
 import { cashSessions, locations, businessMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -63,7 +64,7 @@ async function assertLocationAccess(userId: string, locationId: number) {
 }
 
 export const cashSessionsRouter = router({
-  open: protectedProcedure
+  open: operationalRole
     .meta({
       openapi: {
         method: "POST",
@@ -154,7 +155,7 @@ export const cashSessionsRouter = router({
       };
     }),
 
-  close: protectedProcedure
+  close: operationalRole
     .meta({
       openapi: {
         method: "POST",

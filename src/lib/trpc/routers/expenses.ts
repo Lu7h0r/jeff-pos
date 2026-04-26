@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import {
   expenseCategories,
@@ -82,7 +83,7 @@ const categoriesRouter = router({
       }));
     }),
 
-  create: protectedProcedure
+  create: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -173,7 +174,7 @@ const entriesRouter = router({
       return rows;
     }),
 
-  create: protectedProcedure
+  create: ownerOrManager
     .meta({
       openapi: {
         method: "POST",

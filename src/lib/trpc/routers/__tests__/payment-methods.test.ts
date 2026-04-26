@@ -1,5 +1,5 @@
 import { mock, describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { createTestDb, makeUser, SCHEMA_DDL } from "./helpers";
+import { createTestDb, makeContext, SCHEMA_DDL } from "./helpers";
 
 const { pg, db } = createTestDb();
 mock.module("@/lib/db", () => ({ db, pglite: pg }));
@@ -7,7 +7,7 @@ mock.module("@/lib/db", () => ({ db, pglite: pg }));
 const { paymentMethodsRouter } = await import("../payment-methods");
 const { createCallerFactory } = await import("../../init");
 
-const caller = createCallerFactory(paymentMethodsRouter)({ user: makeUser("user-1") });
+const caller = createCallerFactory(paymentMethodsRouter)(makeContext("user-1"));
 
 beforeAll(async () => { await pg.exec(SCHEMA_DDL); });
 afterAll(async () => { await pg.close(); });
@@ -23,9 +23,9 @@ describe("paymentMethods.list", () => {
     await caller.create({ name: "Cash" });
     await caller.create({ name: "Card" });
 
-    const otherCaller = createCallerFactory(paymentMethodsRouter)({
-      user: makeUser("other-user"),
-    });
+    const otherCaller = createCallerFactory(paymentMethodsRouter)(
+      makeContext("other-user"),
+    );
 
     const myList = await caller.list();
     const otherList = await otherCaller.list();

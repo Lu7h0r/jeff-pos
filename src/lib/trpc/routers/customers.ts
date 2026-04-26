@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { protectedProcedure, router } from "../init";
+import { operationalRole } from "../role-guards";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
 import { eq, and, or } from "drizzle-orm";
@@ -44,7 +45,7 @@ export const customersRouter = router({
         .where(eq(customers.user_uid, ctx.user.id));
     }),
 
-  create: protectedProcedure
+  create: operationalRole
     .meta({ openapi: { method: "POST", path: "/customers", tags: ["Customers"], summary: "Create a customer" } })
     .input(
       z.object({
@@ -67,7 +68,7 @@ export const customersRouter = router({
       return data;
     }),
 
-  update: protectedProcedure
+  update: operationalRole
     .meta({ openapi: { method: "PATCH", path: "/customers/{id}", tags: ["Customers"], summary: "Update a customer" } })
     .input(
       z.object({
@@ -89,7 +90,7 @@ export const customersRouter = router({
       return updated;
     }),
 
-  delete: protectedProcedure
+  delete: operationalRole
     .meta({ openapi: { method: "DELETE", path: "/customers/{id}", tags: ["Customers"], summary: "Delete a customer" } })
     .input(z.object({ id: z.number() }))
     .output(z.object({ success: z.boolean() }))

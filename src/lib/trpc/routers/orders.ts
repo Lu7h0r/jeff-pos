@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { operationalRole, ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import {
   orders,
@@ -167,7 +168,7 @@ export const ordersRouter = router({
   // open cash session, products of same business, stock at location, and
   // sum(payments) === computed total. All writes happen inside one
   // db.transaction so partial state is impossible.
-  create: protectedProcedure
+  create: operationalRole
     .meta({ openapi: { method: "POST", path: "/orders", tags: ["Orders"], summary: "Create an atomic POS sale" } })
     .input(
       z.object({
@@ -467,7 +468,7 @@ export const ordersRouter = router({
 
   // Void an order. Closes DA-3 — replaces the previous broken delete with a
   // soft mark + reversed inventory and cash movements, all in one tx.
-  void: protectedProcedure
+  void: ownerOrManager
     .meta({ openapi: { method: "POST", path: "/orders/{orderId}/void", tags: ["Orders"], summary: "Void an order with reversal" } })
     .input(
       z.object({
@@ -645,7 +646,7 @@ export const ordersRouter = router({
   // mutation with no audit trail. It is intentionally retired. The only
   // free-text field that can be edited after a sale is `notes`; total
   // and state changes must go through void + new sale.
-  editNotes: protectedProcedure
+  editNotes: operationalRole
     .meta({ openapi: { method: "PATCH", path: "/orders/{orderId}/notes", tags: ["Orders"], summary: "Edit notes on an existing order" } })
     .input(
       z.object({

@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import {
   purchaseOrders,
@@ -94,7 +95,7 @@ export const purchasesRouter = router({
       }));
     }),
 
-  create: protectedProcedure
+  create: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -321,7 +322,7 @@ export const purchasesRouter = router({
       });
     }),
 
-  receive: protectedProcedure
+  receive: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -430,7 +431,7 @@ export const purchasesRouter = router({
       });
     }),
 
-  cancel: protectedProcedure
+  cancel: ownerOrManager
     .meta({
       openapi: {
         method: "POST",

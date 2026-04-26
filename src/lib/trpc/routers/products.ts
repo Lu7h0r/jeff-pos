@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -25,7 +26,7 @@ export const productsRouter = router({
       return db.select().from(products).where(eq(products.user_uid, ctx.user.id));
     }),
 
-  create: protectedProcedure
+  create: ownerOrManager
     .meta({ openapi: { method: "POST", path: "/products", tags: ["Products"], summary: "Create a product" } })
     .input(
       z.object({
@@ -58,7 +59,7 @@ export const productsRouter = router({
       return data;
     }),
 
-  update: protectedProcedure
+  update: ownerOrManager
     .meta({ openapi: { method: "PATCH", path: "/products/{id}", tags: ["Products"], summary: "Update a product" } })
     .input(
       z.object({
@@ -81,7 +82,7 @@ export const productsRouter = router({
       return updated;
     }),
 
-  delete: protectedProcedure
+  delete: ownerOrManager
     .meta({ openapi: { method: "DELETE", path: "/products/{id}", tags: ["Products"], summary: "Delete a product" } })
     .input(z.object({ id: z.number() }))
     .output(z.object({ success: z.boolean() }))

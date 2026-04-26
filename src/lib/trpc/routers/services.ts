@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { artistOrAbove, ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import {
   serviceSales,
@@ -165,7 +166,7 @@ const commissionsRouter = router({
       return enriched;
     }),
 
-  markLiquidated: protectedProcedure
+  markLiquidated: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -230,7 +231,7 @@ export const servicesRouter = router({
   // performed the service. It does NOT create or modify orders/order_items.
   // Two writes inside a single tx: service_sales row + commission_estimates
   // row whose shares are computed from the snapshot of staff.default_split.
-  attachToOrderItem: protectedProcedure
+  attachToOrderItem: artistOrAbove
     .meta({
       openapi: {
         method: "POST",

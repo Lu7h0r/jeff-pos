@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
+import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import { staffMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -100,7 +101,7 @@ export const staffRouter = router({
       return rows.map(rowToOutput);
     }),
 
-  create: protectedProcedure
+  create: ownerOrManager
     .meta({
       openapi: {
         method: "POST",
@@ -137,7 +138,7 @@ export const staffRouter = router({
       return rowToOutput(created);
     }),
 
-  update: protectedProcedure
+  update: ownerOrManager
     .meta({
       openapi: {
         method: "PATCH",
@@ -181,7 +182,7 @@ export const staffRouter = router({
       return rowToOutput(updated);
     }),
 
-  archive: protectedProcedure
+  archive: ownerOrManager
     .meta({
       openapi: {
         method: "POST",

@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { protectedProcedure, router } from "../init";
+import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import { paymentMethods } from "@/lib/db/schema";
 import { eq, or, isNull } from "drizzle-orm";
@@ -37,7 +38,7 @@ export const paymentMethodsRouter = router({
       return db.select().from(paymentMethods);
     }),
 
-  create: protectedProcedure
+  create: ownerOrManager
     .meta({ openapi: { method: "POST", path: "/payment-methods", tags: ["Payment Methods"], summary: "Create a payment method" } })
     .input(z.object({ name: z.string().min(1) }))
     .output(paymentMethodSchema)
@@ -52,7 +53,7 @@ export const paymentMethodsRouter = router({
       return data;
     }),
 
-  update: protectedProcedure
+  update: ownerOrManager
     .meta({ openapi: { method: "PATCH", path: "/payment-methods/{id}", tags: ["Payment Methods"], summary: "Update a payment method" } })
     .input(z.object({ id: z.number(), name: z.string().min(1) }))
     .output(paymentMethodSchema)
@@ -65,7 +66,7 @@ export const paymentMethodsRouter = router({
       return data;
     }),
 
-  delete: protectedProcedure
+  delete: ownerOrManager
     .meta({ openapi: { method: "DELETE", path: "/payment-methods/{id}", tags: ["Payment Methods"], summary: "Delete a payment method" } })
     .input(z.object({ id: z.number() }))
     .output(z.object({ success: z.boolean() }))
