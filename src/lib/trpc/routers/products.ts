@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
@@ -37,9 +38,22 @@ export const productsRouter = router({
     )
     .output(productSchema)
     .mutation(async ({ ctx, input }) => {
+      // Batch 4 / DA-7: products.business_id is now NOT NULL. Without an
+      // active business the product cannot be tied to any catalogue, so the
+      // request is rejected at the application layer (no silent fallback).
+      if (ctx.activeBusinessId == null) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "An active business is required to create products",
+        });
+      }
       const [data] = await db
         .insert(products)
-        .values({ ...input, user_uid: ctx.user.id })
+        .values({
+          ...input,
+          user_uid: ctx.user.id,
+          business_id: ctx.activeBusinessId,
+        })
         .returning();
       return data;
     }),

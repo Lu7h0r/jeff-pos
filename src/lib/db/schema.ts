@@ -74,7 +74,9 @@ export const products = pgTable("products", {
   in_stock: integer("in_stock").notNull(),
   user_uid: varchar("user_uid", { length: 255 }).notNull(),
   category: varchar("category", { length: 50 }),
-  business_id: integer("business_id").references(() => businesses.id),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
   sku: varchar("sku", { length: 64 }),
   cost_amount: integer("cost_amount"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
@@ -97,22 +99,58 @@ export const customers = pgTable("customers", {
 });
 
 // ── Orders ──────────────────────────────────────────────────────────────────
+// Batch 4: orders gain business/location/cash_session scoping plus split
+// payment_status (financial) vs process_status (operational) and the void
+// trail (voidance_reason / voided_at / voided_by_user_id). The legacy
+// `status` column is kept for back-compat with dashboard/transactions
+// queries that still read it; new code uses `process_status` as the
+// source of truth. Allowed payment_status (zod): paid, unpaid,
+// partially_paid. Allowed process_status (zod): pending, ongoing,
+// complete, void.
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   customer_id: integer("customer_id").references(() => customers.id),
   total_amount: integer("total_amount").notNull(),
   user_uid: varchar("user_uid", { length: 255 }).notNull(),
   status: varchar("status", { length: 20 }),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  cash_session_id: integer("cash_session_id")
+    .notNull()
+    .references(() => cashSessions.id),
+  payment_status: varchar("payment_status", { length: 20 })
+    .notNull()
+    .default("unpaid"),
+  process_status: varchar("process_status", { length: 20 })
+    .notNull()
+    .default("complete"),
+  voidance_reason: text("voidance_reason"),
+  voided_at: timestamp("voided_at"),
+  voided_by_user_id: text("voided_by_user_id").references(() => user.id),
+  notes: text("notes"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
 // ── Order Items ─────────────────────────────────────────────────────────────
+// Batch 4 adds snapshot columns (product_name, unit_price, unit_cost,
+// total_price) populated at sale time so price/name changes after the
+// sale never alter the order_item row. They are nullable for legacy
+// rows that pre-date Batch 4 (no demo orders pre-migrate); new inserts
+// always populate them. The legacy `price` column stays for back-compat.
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
   order_id: integer("order_id").references(() => orders.id),
   product_id: integer("product_id").references(() => products.id),
   quantity: integer("quantity").notNull(),
   price: integer("price").notNull(),
+  product_name: varchar("product_name", { length: 255 }),
+  unit_price: integer("unit_price"),
+  unit_cost: integer("unit_cost"),
+  total_price: integer("total_price"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -141,13 +179,72 @@ export const transactions = pgTable("transactions", {
   created_at: timestamp("created_at").defaultNow(),
 });
 
+// ── Order Payments ──────────────────────────────────────────────────────────
+// Batch 4: 1:N from orders. Multi-payment supported from day 1 (pattern
+// inspired by NexoPOS nexopos_orders_payments). Every payment row references
+// the cash_session in effect when the payment was registered — even digital
+// payments — so cash session close/reconciliation has full audit context.
+export const orderPayments = pgTable("order_payments", {
+  id: serial("id").primaryKey(),
+  order_id: integer("order_id")
+    .notNull()
+    .references(() => orders.id),
+  payment_method_id: integer("payment_method_id")
+    .notNull()
+    .references(() => paymentMethods.id),
+  cash_session_id: integer("cash_session_id")
+    .notNull()
+    .references(() => cashSessions.id),
+  amount: integer("amount").notNull(),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
 // ── Relations ───────────────────────────────────────────────────────────────
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   customer: one(customers, {
     fields: [orders.customer_id],
     references: [customers.id],
   }),
+  business: one(businesses, {
+    fields: [orders.business_id],
+    references: [businesses.id],
+  }),
+  location: one(locations, {
+    fields: [orders.location_id],
+    references: [locations.id],
+  }),
+  cashSession: one(cashSessions, {
+    fields: [orders.cash_session_id],
+    references: [cashSessions.id],
+  }),
+  voidedBy: one(user, {
+    fields: [orders.voided_by_user_id],
+    references: [user.id],
+  }),
   orderItems: many(orderItems),
+  payments: many(orderPayments),
+}));
+
+export const orderPaymentsRelations = relations(orderPayments, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderPayments.order_id],
+    references: [orders.id],
+  }),
+  paymentMethod: one(paymentMethods, {
+    fields: [orderPayments.payment_method_id],
+    references: [paymentMethods.id],
+  }),
+  cashSession: one(cashSessions, {
+    fields: [orderPayments.cash_session_id],
+    references: [cashSessions.id],
+  }),
+  createdBy: one(user, {
+    fields: [orderPayments.created_by_user_id],
+    references: [user.id],
+  }),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({

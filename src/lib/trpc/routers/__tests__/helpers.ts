@@ -17,13 +17,18 @@ const TABLES: PgTable[] = [
   schema.products,
   schema.customers,
   schema.paymentMethods,
-  schema.orders,
-  schema.orderItems,
-  schema.transactions,
-  // cash_sessions references locations; cash_movements references
-  // cash_sessions and payment_methods. Keep this order FK-safe.
+  // cash_sessions and cash_movements moved before orders because Batch 4
+  // adds orders.cash_session_id NOT NULL FK -> cash_sessions.id. Keep this
+  // section FK-safe: cash_sessions before any table that references it.
   schema.cashSessions,
   schema.cashMovements,
+  schema.orders,
+  schema.orderItems,
+  // order_payments references orders, payment_methods and cash_sessions —
+  // all already declared above. Lives between order_items and transactions
+  // so transactions still resolves its order_id FK.
+  schema.orderPayments,
+  schema.transactions,
   // inventory_balances and inventory_movements both reference businesses,
   // locations and products — all already declared above. Keep this last so
   // FK targets exist when DDL is applied in order.
