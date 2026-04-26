@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   Card,
   CardHeader,
@@ -43,8 +44,6 @@ import type { RouterOutputs } from "@/lib/trpc/router";
 
 type BalanceRow = RouterOutputs["inventory"]["balancesByLocation"][number];
 
-const ACTIVE_LOCATION_COOKIE = "jeff_active_location_id";
-
 function readActiveLocationCookie(): number | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(/jeff_active_location_id=(\d+)/);
@@ -66,23 +65,22 @@ export default function InventoryPage() {
 }
 
 function NoLocationSelected() {
+  const t = useTranslations("inventory");
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Inventario</CardTitle>
-        <CardDescription>Select a location first.</CardDescription>
+        <CardTitle>{t("title")}</CardTitle>
+        <CardDescription>{t("selectLocation")}</CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground">
-          No active location is set. Use the location selector in the header to
-          pick a location and then come back to this page.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("selectLocationHint")}</p>
       </CardContent>
     </Card>
   );
 }
 
 function InventoryForLocation({ locationId }: { locationId: number }) {
+  const t = useTranslations("inventory");
   const trpc = useTRPC();
   const queryClient = useQueryClient();
 
@@ -112,9 +110,9 @@ function InventoryForLocation({ locationId }: { locationId: number }) {
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
-            <CardTitle>Inventory</CardTitle>
+            <CardTitle>{t("title")}</CardTitle>
             <CardDescription>
-              Active location: {activeLocation?.name ?? "—"}
+              {t("activeLocation", { name: activeLocation?.name ?? "—" })}
             </CardDescription>
           </div>
           <Button
@@ -122,26 +120,23 @@ function InventoryForLocation({ locationId }: { locationId: number }) {
             disabled={otherLocations.length === 0}
             onClick={() => setTransferOpen(true)}
           >
-            Transfer to other location
+            {t("transferToOther")}
           </Button>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <Skeleton className="h-40 w-full" />
           ) : (balances ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No inventory rows for this location yet. Use Adjust to seed the
-              first balance.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("noBalances")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">On hand</TableHead>
-                  <TableHead className="text-right">Reserved</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("colSku")}</TableHead>
+                  <TableHead>{t("colProduct")}</TableHead>
+                  <TableHead className="text-right">{t("colOnHand")}</TableHead>
+                  <TableHead className="text-right">{t("colReserved")}</TableHead>
+                  <TableHead className="text-right">{t("colActions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -163,7 +158,7 @@ function InventoryForLocation({ locationId }: { locationId: number }) {
                         size="sm"
                         onClick={() => setAdjustTarget(row)}
                       >
-                        Adjust
+                        {t("adjust")}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -210,6 +205,8 @@ interface AdjustDialogProps {
 }
 
 function AdjustDialog({ row, locationId, onClose, onSuccess }: AdjustDialogProps) {
+  const t = useTranslations("inventory");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const [delta, setDelta] = useState<string>("0");
   const [type, setType] = useState<"adjustment" | "internal_consumption">(
@@ -221,8 +218,8 @@ function AdjustDialog({ row, locationId, onClose, onSuccess }: AdjustDialogProps
     mutationOptions: trpc.inventory.adjust.mutationOptions(),
     invalidateKeys: trpc.inventory.balancesByLocation.queryOptions({ locationId })
       .queryKey,
-    successMessage: "Inventory adjusted",
-    errorMessage: "Failed to adjust inventory",
+    successMessage: t("adjusted"),
+    errorMessage: t("adjustFailed"),
     onSuccess: () => {
       onSuccess();
     },
@@ -245,15 +242,14 @@ function AdjustDialog({ row, locationId, onClose, onSuccess }: AdjustDialogProps
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Adjust {row.product_name}</DialogTitle>
+          <DialogTitle>{t("adjustTitle", { product: row.product_name })}</DialogTitle>
           <DialogDescription>
-            Current on-hand: {row.quantity_on_hand}. Use a positive delta to add
-            stock, negative to remove.
+            {t("adjustSubtitle", { onHand: row.quantity_on_hand })}
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="adjust-delta">Quantity delta</Label>
+            <Label htmlFor="adjust-delta">{t("deltaLabel")}</Label>
             <Input
               id="adjust-delta"
               type="number"
@@ -264,37 +260,37 @@ function AdjustDialog({ row, locationId, onClose, onSuccess }: AdjustDialogProps
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="adjust-type">Type</Label>
+            <Label htmlFor="adjust-type">{t("typeLabel")}</Label>
             <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
               <SelectTrigger id="adjust-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="adjustment">Adjustment</SelectItem>
+                <SelectItem value="adjustment">{t("typeAdjustment")}</SelectItem>
                 <SelectItem value="internal_consumption">
-                  Internal consumption
+                  {t("typeInternal")}
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="adjust-notes">Notes (optional)</Label>
+            <Label htmlFor="adjust-notes">{tc("notesOptional")}</Label>
             <Input
               id="adjust-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Reason, reference, etc."
+              placeholder={t("notesPlaceholder")}
             />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button type="submit" disabled={adjustMutation.isPending}>
               {adjustMutation.isPending ? (
                 <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Save
+              {tc("save")}
             </Button>
           </DialogFooter>
         </form>
@@ -318,6 +314,8 @@ function TransferDialog({
   onClose,
   onSuccess,
 }: TransferDialogProps) {
+  const t = useTranslations("inventory");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const [productId, setProductId] = useState<string>(
     balances[0] ? String(balances[0].product_id) : "",
@@ -332,8 +330,8 @@ function TransferDialog({
     mutationOptions: trpc.inventory.transfer.mutationOptions(),
     invalidateKeys: trpc.inventory.balancesByLocation.queryOptions({ locationId })
       .queryKey,
-    successMessage: "Inventory transferred",
-    errorMessage: "Failed to transfer inventory",
+    successMessage: t("transferred"),
+    errorMessage: t("transferFailed"),
     onSuccess: () => {
       onSuccess();
     },
@@ -360,33 +358,30 @@ function TransferDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Transfer inventory</DialogTitle>
-          <DialogDescription>
-            Move stock to another location of the same business. The ledger
-            records two linked movements.
-          </DialogDescription>
+          <DialogTitle>{t("transferTitle")}</DialogTitle>
+          <DialogDescription>{t("transferSubtitle")}</DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="transfer-product">Product</Label>
+            <Label htmlFor="transfer-product">{t("transferProductLabel")}</Label>
             <Select value={productId} onValueChange={setProductId}>
               <SelectTrigger id="transfer-product">
-                <SelectValue placeholder="Pick a product" />
+                <SelectValue placeholder={t("pickProduct")} />
               </SelectTrigger>
               <SelectContent>
                 {balances.map((row) => (
                   <SelectItem key={row.product_id} value={String(row.product_id)}>
-                    {row.product_name} ({row.quantity_on_hand} on hand)
+                    {t("productOnHand", { name: row.product_name, onHand: row.quantity_on_hand })}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="transfer-target">Target location</Label>
+            <Label htmlFor="transfer-target">{t("transferTargetLabel")}</Label>
             <Select value={toLocationId} onValueChange={setToLocationId}>
               <SelectTrigger id="transfer-target">
-                <SelectValue placeholder="Pick target" />
+                <SelectValue placeholder={t("pickTarget")} />
               </SelectTrigger>
               <SelectContent>
                 {targets.map((loc) => (
@@ -398,7 +393,7 @@ function TransferDialog({
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="transfer-quantity">Quantity</Label>
+            <Label htmlFor="transfer-quantity">{t("transferQty")}</Label>
             <Input
               id="transfer-quantity"
               type="number"
@@ -410,7 +405,7 @@ function TransferDialog({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="transfer-notes">Notes (optional)</Label>
+            <Label htmlFor="transfer-notes">{tc("notesOptional")}</Label>
             <Input
               id="transfer-notes"
               value={notes}
@@ -419,7 +414,7 @@ function TransferDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button
               type="submit"
@@ -428,7 +423,7 @@ function TransferDialog({
               {transferMutation.isPending ? (
                 <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Transfer
+              {t("transferAction")}
             </Button>
           </DialogFooter>
         </form>

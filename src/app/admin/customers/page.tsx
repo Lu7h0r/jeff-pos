@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/v4";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PlusCircle, FilePenIcon, TrashIcon, UsersIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,43 +22,10 @@ import type { RouterOutputs } from "@/lib/trpc/router";
 
 type Customer = RouterOutputs["customers"]["list"][number];
 
-const customerFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email"),
-  phone: z.string(),
-  status: z.enum(["active", "inactive"]),
-});
-
-const statusFilterOptions: FilterOption[] = [
-  { label: "All", value: "all" },
-  { label: "Active", value: "active", variant: "success" },
-  { label: "Inactive", value: "inactive", variant: "danger" },
-];
-
-const tableColumns: Column<Customer>[] = [
-  { key: "name", header: "Name", sortable: true, className: "font-medium" },
-  { key: "email", header: "Email", sortable: true },
-  { key: "phone", header: "Phone", hideOnMobile: true },
-  {
-    key: "status",
-    header: "Status",
-    sortable: true,
-    render: (row) => (
-      <span className={row.status === "active" ? "text-green-600" : "text-muted-foreground"}>
-        {row.status ?? "active"}
-      </span>
-    ),
-  },
-];
-
-const exportColumns: ExportColumn<Customer>[] = [
-  { key: "name", header: "Name", getValue: (c) => c.name },
-  { key: "email", header: "Email", getValue: (c) => c.email },
-  { key: "phone", header: "Phone", getValue: (c) => c.phone ?? "" },
-  { key: "status", header: "Status", getValue: (c) => c.status ?? "active" },
-];
-
 export default function CustomersPage() {
+  const t = useTranslations("customers");
+  const tCommon = useTranslations("common");
+  const tValidation = useTranslations("validation");
   const trpc = useTRPC();
   const { data: customers = [], isLoading, error } = useQuery(trpc.customers.list.queryOptions());
 
@@ -71,27 +39,63 @@ export default function CustomersPage() {
   const isEditing = editingId !== null;
   const invalidateKeys = trpc.customers.list.queryOptions().queryKey;
 
+  const customerFormSchema = z.object({
+    name: z.string().min(1, tValidation("nameRequired")),
+    email: z.string().email(tValidation("invalidEmail")),
+    phone: z.string(),
+    status: z.enum(["active", "inactive"]),
+  });
+
+  const statusFilterOptions: FilterOption[] = [
+    { label: t("filterAll"), value: "all" },
+    { label: t("filterActive"), value: "active", variant: "success" },
+    { label: t("filterInactive"), value: "inactive", variant: "danger" },
+  ];
+
+  const tableColumns: Column<Customer>[] = [
+    { key: "name", header: tCommon("name"), sortable: true, className: "font-medium" },
+    { key: "email", header: tCommon("email"), sortable: true },
+    { key: "phone", header: tCommon("phone"), hideOnMobile: true },
+    {
+      key: "status",
+      header: tCommon("status"),
+      sortable: true,
+      render: (row) => (
+        <span className={row.status === "active" ? "text-green-600" : "text-muted-foreground"}>
+          {row.status === "inactive" ? tCommon("inactive") : tCommon("active")}
+        </span>
+      ),
+    },
+  ];
+
+  const exportColumns: ExportColumn<Customer>[] = [
+    { key: "name", header: tCommon("name"), getValue: (c) => c.name },
+    { key: "email", header: tCommon("email"), getValue: (c) => c.email },
+    { key: "phone", header: tCommon("phone"), getValue: (c) => c.phone ?? "" },
+    { key: "status", header: tCommon("status"), getValue: (c) => c.status ?? "active" },
+  ];
+
   const createMutation = useCrudMutation({
     mutationOptions: trpc.customers.create.mutationOptions(),
     invalidateKeys,
-    successMessage: "Customer created",
-    errorMessage: "Failed to create customer",
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
     onSuccess: () => setIsDialogOpen(false),
   });
 
   const updateMutation = useCrudMutation({
     mutationOptions: trpc.customers.update.mutationOptions(),
     invalidateKeys,
-    successMessage: "Customer updated",
-    errorMessage: "Failed to update customer",
+    successMessage: t("updated"),
+    errorMessage: t("updateFailed"),
     onSuccess: () => setIsDialogOpen(false),
   });
 
   const deleteMutation = useCrudMutation({
     mutationOptions: trpc.customers.delete.mutationOptions(),
     invalidateKeys,
-    successMessage: "Customer deleted",
-    errorMessage: "Failed to delete customer",
+    successMessage: t("deleted"),
+    errorMessage: t("deleteFailed"),
   });
 
   const form = useForm({
@@ -148,11 +152,11 @@ export default function CustomersPage() {
 
   const actionsColumn: Column<Customer> = {
     key: "actions",
-    header: "Actions",
+    header: tCommon("actions"),
     render: (row) => (
       <TableActions>
-        <TableActionButton onClick={() => openEdit(row)} icon={<FilePenIcon className="w-4 h-4" />} label="Edit" />
-        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label="Delete" />
+        <TableActionButton onClick={() => openEdit(row)} icon={<FilePenIcon className="w-4 h-4" />} label={tCommon("edit")} />
+        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label={tCommon("delete")} />
       </TableActions>
     ),
   };
@@ -174,10 +178,10 @@ export default function CustomersPage() {
         <SearchFilter
           search={searchTerm}
           onSearchChange={setSearchTerm}
-          searchPlaceholder="Search customers..."
+          searchPlaceholder={t("searchPlaceholder")}
           filters={[{ options: statusFilterOptions, value: statusFilter, onChange: setStatusFilter }]}
         >
-          <Button size="sm" onClick={openCreate}><PlusCircle className="w-4 h-4 mr-2" />Add Customer</Button>
+          <Button size="sm" onClick={openCreate}><PlusCircle className="w-4 h-4 mr-2" />{t("addCustomer")}</Button>
         </SearchFilter>
       </CardHeader>
       <CardContent className="p-0">
@@ -185,8 +189,8 @@ export default function CustomersPage() {
           data={filteredCustomers}
           columns={[...tableColumns, actionsColumn]}
           exportColumns={exportColumns}
-          exportFilename="customers"
-          emptyMessage="No customers found."
+          exportFilename="clientes"
+          emptyMessage={t("empty")}
           emptyIcon={<UsersIcon className="w-8 h-8" />}
           defaultSort={[{ id: "name", desc: false }]}
         />
@@ -194,7 +198,7 @@ export default function CustomersPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setIsDialogOpen(false); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{isEditing ? "Edit Customer" : "Create New Customer"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{isEditing ? t("editTitle") : t("createTitle")}</DialogTitle></DialogHeader>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -206,7 +210,7 @@ export default function CustomersPage() {
               <form.Field name="name">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="name">Name</Label>
+                    <Label htmlFor="name">{tCommon("name")}</Label>
                     <div className="col-span-3">
                       <Input id="name" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} error={field.state.meta.errors.length > 0 ? field.state.meta.errors.map(e => e?.message ?? e).join(", ") : undefined} />
                     </div>
@@ -216,7 +220,7 @@ export default function CustomersPage() {
               <form.Field name="email">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">{tCommon("email")}</Label>
                     <div className="col-span-3">
                       <Input id="email" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} error={field.state.meta.errors.length > 0 ? field.state.meta.errors.map(e => e?.message ?? e).join(", ") : undefined} />
                     </div>
@@ -226,7 +230,7 @@ export default function CustomersPage() {
               <form.Field name="phone">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="phone">Phone</Label>
+                    <Label htmlFor="phone">{tCommon("phone")}</Label>
                     <Input id="phone" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} className="col-span-3" />
                   </div>
                 )}
@@ -234,21 +238,21 @@ export default function CustomersPage() {
               <form.Field name="status">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="status">Status</Label>
+                    <Label htmlFor="status">{tCommon("status")}</Label>
                     <Select value={field.state.value} onValueChange={(value) => field.handleChange(value as "active" | "inactive")}>
-                      <SelectTrigger id="status" className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
-                      <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+                      <SelectTrigger id="status" className="col-span-3"><SelectValue placeholder={t("selectStatus")} /></SelectTrigger>
+                      <SelectContent><SelectItem value="active">{tCommon("active")}</SelectItem><SelectItem value="inactive">{tCommon("inactive")}</SelectItem></SelectContent>
                     </Select>
                   </div>
                 )}
               </form.Field>
             </div>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+              <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>{tCommon("cancel")}</Button>
               <form.Subscribe selector={(state) => state.isSubmitting}>
                 {(isSubmitting) => (
                   <Button type="submit" disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}>
-                    {isEditing ? "Update Customer" : "Create Customer"}
+                    {isEditing ? t("updateButton") : t("createButton")}
                   </Button>
                 )}
               </form.Subscribe>
@@ -257,7 +261,7 @@ export default function CustomersPage() {
         </DialogContent>
       </Dialog>
 
-      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description="Are you sure you want to delete this customer? This action cannot be undone." />
+      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description={t("deleteConfirm")} />
     </Card>
   );
 }

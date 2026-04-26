@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FilePenIcon, TrashIcon, EyeIcon, ShoppingCartIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -14,67 +15,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useCrudMutation } from "@/hooks/use-crud-mutation";
 import { DataTable, TableActions, TableActionButton, type Column, type ExportColumn } from "@/components/ui/data-table";
 import { SearchFilter, type FilterOption } from "@/components/ui/search-filter";
+import { formatCurrency, formatDateOnly } from "@/lib/utils";
 import type { RouterOutputs } from "@/lib/trpc/router";
 
 type Order = RouterOutputs["orders"]["list"][number];
 
-const statusFilterOptions: FilterOption[] = [
-  { label: "All", value: "all" },
-  { label: "Complete", value: "complete", variant: "success" },
-  { label: "Pending", value: "pending", variant: "warning" },
-  { label: "Void", value: "void", variant: "danger" },
-];
-
-const tableColumns: Column<Order>[] = [
-  { key: "id", header: "Order ID", sortable: true },
-  {
-    key: "customer",
-    header: "Customer",
-    sortable: true,
-    accessorFn: (row) => row.customer?.name ?? "",
-    render: (row) => row.customer?.name ?? "",
-  },
-  {
-    key: "total_amount",
-    header: "Total",
-    sortable: true,
-    accessorFn: (row) => row.total_amount,
-    render: (row) => `$${(row.total_amount / 100).toFixed(2)}`,
-  },
-  {
-    key: "process_status",
-    header: "Status",
-    sortable: true,
-    render: (row) => {
-      const s = row.process_status;
-      const color =
-        s === "complete"
-          ? "text-green-600"
-          : s === "void"
-            ? "text-red-600"
-            : "text-yellow-600";
-      return <span className={color}>{s.charAt(0).toUpperCase() + s.slice(1)}</span>;
-    },
-  },
-  {
-    key: "created_at",
-    header: "Date",
-    sortable: true,
-    hideOnMobile: true,
-    accessorFn: (row) => row.created_at ? new Date(row.created_at).getTime() : 0,
-    render: (row) => row.created_at ? new Date(row.created_at).toLocaleDateString() : "",
-  },
-];
-
-const exportColumns: ExportColumn<Order>[] = [
-  { key: "id", header: "Order ID", getValue: (o) => o.id },
-  { key: "customer", header: "Customer", getValue: (o) => o.customer?.name ?? "" },
-  { key: "total", header: "Total", getValue: (o) => (o.total_amount / 100).toFixed(2) },
-  { key: "status", header: "Status", getValue: (o) => o.process_status },
-  { key: "date", header: "Date", getValue: (o) => o.created_at ? new Date(o.created_at).toLocaleDateString() : "" },
-];
-
 export default function OrdersPage() {
+  const t = useTranslations("orders");
+  const tCommon = useTranslations("common");
   const trpc = useTRPC();
   const { data: orders = [], isLoading, error } = useQuery(trpc.orders.list.queryOptions());
 
@@ -88,14 +36,73 @@ export default function OrdersPage() {
 
   const invalidateKeys = trpc.orders.list.queryOptions().queryKey;
 
-  // Closes DA-8: total/status changes are no longer editable. The only
-  // post-sale mutation is notes; total/state changes go through void +
-  // new sale.
+  const statusFilterOptions: FilterOption[] = [
+    { label: t("filterAll"), value: "all" },
+    { label: t("filterComplete"), value: "complete", variant: "success" },
+    { label: t("filterPending"), value: "pending", variant: "warning" },
+    { label: t("filterVoid"), value: "void", variant: "danger" },
+  ];
+
+  const tableColumns: Column<Order>[] = [
+    { key: "id", header: t("colId"), sortable: true },
+    {
+      key: "customer",
+      header: t("colCustomer"),
+      sortable: true,
+      accessorFn: (row) => row.customer?.name ?? "",
+      render: (row) => row.customer?.name ?? "",
+    },
+    {
+      key: "total_amount",
+      header: t("colTotal"),
+      sortable: true,
+      accessorFn: (row) => row.total_amount,
+      render: (row) => formatCurrency(row.total_amount),
+    },
+    {
+      key: "process_status",
+      header: t("colStatus"),
+      sortable: true,
+      render: (row) => {
+        const s = row.process_status;
+        const color =
+          s === "complete"
+            ? "text-green-600"
+            : s === "void"
+              ? "text-red-600"
+              : "text-yellow-600";
+        const label =
+          s === "complete"
+            ? t("statusComplete")
+            : s === "void"
+              ? t("statusVoid")
+              : t("statusPending");
+        return <span className={color}>{label}</span>;
+      },
+    },
+    {
+      key: "created_at",
+      header: t("colDate"),
+      sortable: true,
+      hideOnMobile: true,
+      accessorFn: (row) => row.created_at ? new Date(row.created_at).getTime() : 0,
+      render: (row) => row.created_at ? formatDateOnly(row.created_at) : "",
+    },
+  ];
+
+  const exportColumns: ExportColumn<Order>[] = [
+    { key: "id", header: t("colId"), getValue: (o) => o.id },
+    { key: "customer", header: t("colCustomer"), getValue: (o) => o.customer?.name ?? "" },
+    { key: "total", header: t("colTotal"), getValue: (o) => o.total_amount },
+    { key: "status", header: t("colStatus"), getValue: (o) => o.process_status },
+    { key: "date", header: t("colDate"), getValue: (o) => o.created_at ? formatDateOnly(o.created_at) : "" },
+  ];
+
   const editNotesMutation = useCrudMutation({
     mutationOptions: trpc.orders.editNotes.mutationOptions(),
     invalidateKeys,
-    successMessage: "Notes updated",
-    errorMessage: "Failed to update notes",
+    successMessage: t("notesUpdated"),
+    errorMessage: t("notesUpdateFailed"),
     onSuccess: () => {
       setIsNotesOpen(false);
       setEditingOrder(null);
@@ -105,8 +112,8 @@ export default function OrdersPage() {
   const voidMutation = useCrudMutation({
     mutationOptions: trpc.orders.void.mutationOptions(),
     invalidateKeys,
-    successMessage: "Order voided",
-    errorMessage: "Failed to void order",
+    successMessage: t("voided"),
+    errorMessage: t("voidFailed"),
   });
 
   const filteredOrders = useMemo(() => {
@@ -134,7 +141,7 @@ export default function OrdersPage() {
   const handleVoid = () => {
     if (deleteId !== null) {
       const reason = typeof window !== "undefined"
-        ? window.prompt("Reason for voiding this order (min 3 characters):") ?? ""
+        ? window.prompt(t("voidPromptTitle")) ?? ""
         : "";
       if (reason.trim().length >= 3) {
         voidMutation.mutate({ orderId: deleteId, voidanceReason: reason.trim() });
@@ -146,13 +153,13 @@ export default function OrdersPage() {
 
   const actionsColumn: Column<Order> = {
     key: "actions",
-    header: "Actions",
+    header: tCommon("actions"),
     render: (row) => (
       <TableActions>
-        <TableActionButton onClick={() => openNotesEditor(row)} icon={<FilePenIcon className="w-4 h-4" />} label="Editar notas" />
-        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label="Anular" />
+        <TableActionButton onClick={() => openNotesEditor(row)} icon={<FilePenIcon className="w-4 h-4" />} label={t("editNotes")} />
+        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label={t("voidAction")} />
         <Link href={`/admin/orders/${row.id}`} prefetch={false} onClick={(e) => e.stopPropagation()}>
-          <Button size="icon" variant="ghost"><EyeIcon className="w-4 h-4" /><span className="sr-only">View</span></Button>
+          <Button size="icon" variant="ghost"><EyeIcon className="w-4 h-4" /><span className="sr-only">{t("viewAction")}</span></Button>
         </Link>
       </TableActions>
     ),
@@ -175,7 +182,7 @@ export default function OrdersPage() {
         <SearchFilter
           search={searchTerm}
           onSearchChange={setSearchTerm}
-          searchPlaceholder="Search orders..."
+          searchPlaceholder={t("searchPlaceholder")}
           filters={[{ options: statusFilterOptions, value: statusFilter, onChange: setStatusFilter }]}
         />
       </CardHeader>
@@ -184,8 +191,8 @@ export default function OrdersPage() {
           data={filteredOrders}
           columns={[...tableColumns, actionsColumn]}
           exportColumns={exportColumns}
-          exportFilename="orders"
-          emptyMessage="No orders found."
+          exportFilename="ordenes"
+          emptyMessage={t("empty")}
           emptyIcon={<ShoppingCartIcon className="w-8 h-8" />}
           defaultSort={[{ id: "created_at", desc: true }]}
         />
@@ -194,36 +201,34 @@ export default function OrdersPage() {
       <Dialog open={isNotesOpen} onOpenChange={(open) => { if (!open) { setIsNotesOpen(false); setEditingOrder(null); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar notas — Orden #{editingOrder?.id ?? ""}</DialogTitle>
+            <DialogTitle>{t("editNotesTitle", { id: editingOrder?.id ?? "" })}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <p className="text-xs text-muted-foreground">
-              Total y estado no son editables. Para corregir una venta, usá Anular y registrá una venta nueva.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("editNotesHelp")}</p>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="order-notes">Notas</Label>
+              <Label htmlFor="order-notes">{tCommon("notes")}</Label>
               <textarea
                 id="order-notes"
                 value={notesDraft}
                 onChange={(e) => setNotesDraft(e.target.value)}
                 rows={5}
-                placeholder="Notas internas de la orden"
+                placeholder={t("notesPlaceholder")}
                 className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => { setIsNotesOpen(false); setEditingOrder(null); }}>
-              Cancelar
+              {tCommon("cancel")}
             </Button>
             <Button onClick={submitNotes} disabled={editNotesMutation.isPending || !editingOrder}>
-              Guardar notas
+              {t("saveNotes")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleVoid} description="Voiding will reverse stock and cash. The row is preserved for audit. You will be asked for a reason." />
+      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleVoid} description={t("voidConfirmDescription")} />
     </Card>
   );
 }
