@@ -202,3 +202,111 @@ export const locationsRelations = relations(locations, ({ one }) => ({
     references: [businesses.id],
   }),
 }));
+
+// ── Cash Sessions ───────────────────────────────────────────────────────────
+// One open session per (business, location). status allowed values: open,
+// closed (enforced at zod layer, no DB CHECK to keep tableToDDL helper simple).
+// Amounts in minor currency units (integer). expected_cash_amount is updated
+// as cash sales/refunds/manual movements happen; counted_cash_amount is set
+// at close time and difference_amount = counted - expected.
+export const cashSessions = pgTable("cash_sessions", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  opened_by_user_id: text("opened_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  closed_by_user_id: text("closed_by_user_id").references(() => user.id),
+  opening_cash_amount: integer("opening_cash_amount").notNull().default(0),
+  expected_cash_amount: integer("expected_cash_amount").notNull().default(0),
+  counted_cash_amount: integer("counted_cash_amount"),
+  expected_digital_amount: integer("expected_digital_amount").notNull().default(0),
+  difference_amount: integer("difference_amount"),
+  status: varchar("status", { length: 20 }).notNull().default("open"),
+  opened_at: timestamp("opened_at").defaultNow(),
+  closed_at: timestamp("closed_at"),
+  notes: text("notes"),
+});
+
+// ── Cash Movements ──────────────────────────────────────────────────────────
+// Running-balance ledger for the cash drawer (Ajuste 1, pattern inspired by
+// NexoPOS nexopos_registers_history). Each row stores balance_before and
+// balance_after so the current cash balance is an O(1) read of the latest
+// row for a session. amount is signed: positive = money in, negative = out.
+// type allowed values: sale, refund, manual_in, manual_out, adjustment.
+// transaction_type allowed: positive, negative, unchanged. Both enforced
+// at the zod layer in routers, no DB CHECK.
+export const cashMovements = pgTable("cash_movements", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  cash_session_id: integer("cash_session_id")
+    .notNull()
+    .references(() => cashSessions.id),
+  type: varchar("type", { length: 20 }).notNull(),
+  payment_method_id: integer("payment_method_id").references(() => paymentMethods.id),
+  source_type: varchar("source_type", { length: 50 }),
+  source_id: integer("source_id"),
+  amount: integer("amount").notNull(),
+  balance_before: integer("balance_before").notNull(),
+  balance_after: integer("balance_after").notNull(),
+  transaction_type: varchar("transaction_type", { length: 20 }).notNull(),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const cashSessionsRelations = relations(cashSessions, ({ one, many }) => ({
+  business: one(businesses, {
+    fields: [cashSessions.business_id],
+    references: [businesses.id],
+  }),
+  location: one(locations, {
+    fields: [cashSessions.location_id],
+    references: [locations.id],
+  }),
+  openedBy: one(user, {
+    fields: [cashSessions.opened_by_user_id],
+    references: [user.id],
+    relationName: "cashSessionOpenedBy",
+  }),
+  closedBy: one(user, {
+    fields: [cashSessions.closed_by_user_id],
+    references: [user.id],
+    relationName: "cashSessionClosedBy",
+  }),
+  movements: many(cashMovements),
+}));
+
+export const cashMovementsRelations = relations(cashMovements, ({ one }) => ({
+  business: one(businesses, {
+    fields: [cashMovements.business_id],
+    references: [businesses.id],
+  }),
+  location: one(locations, {
+    fields: [cashMovements.location_id],
+    references: [locations.id],
+  }),
+  cashSession: one(cashSessions, {
+    fields: [cashMovements.cash_session_id],
+    references: [cashSessions.id],
+  }),
+  paymentMethod: one(paymentMethods, {
+    fields: [cashMovements.payment_method_id],
+    references: [paymentMethods.id],
+  }),
+  createdBy: one(user, {
+    fields: [cashMovements.created_by_user_id],
+    references: [user.id],
+  }),
+}));
