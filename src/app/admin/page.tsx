@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardHeader,
@@ -7,413 +8,479 @@ import {
   CardContent,
   CardDescription,
 } from "@/components/ui/card";
-import {
-  ChartTooltipContent,
-  ChartTooltip,
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import {
-  DollarSign,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
-import {
-  Pie,
-  PieChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Bar,
-  BarChart,
-  Area,
-  AreaChart,
-  Cell,
-  Label,
-} from "recharts";
-import { formatCurrency, formatShortDate } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  AlertTriangleIcon,
+  BanIcon,
+  DollarSignIcon,
+  HashIcon,
+  MapPinIcon,
+  WalletIcon,
+} from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 import { useTRPC } from "@/lib/trpc/client";
 import { useQuery } from "@tanstack/react-query";
 
-const CHART_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
-];
+const ACTIVE_LOCATION_COOKIE = "jeff_active_location_id";
 
-export default function Page() {
+type RangePreset = "today" | "week" | "month" | "custom";
+
+function readActiveLocationCookie(): number | null {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(/jeff_active_location_id=(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function startOfWeek(): Date {
+  const d = startOfToday();
+  const day = d.getDay();
+  // Monday-based week (matches Jeff's operational week 11:00–21:00 L-D).
+  const offset = (day + 6) % 7;
+  d.setDate(d.getDate() - offset);
+  return d;
+}
+
+function startOfMonth(): Date {
+  const d = startOfToday();
+  d.setDate(1);
+  return d;
+}
+
+function toInputValue(d: Date): string {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function presetRange(preset: RangePreset): { from: Date; to: Date } {
+  const to = new Date();
+  switch (preset) {
+    case "today":
+      return { from: startOfToday(), to };
+    case "week":
+      return { from: startOfWeek(), to };
+    case "month":
+      return { from: startOfMonth(), to };
+    default:
+      return { from: startOfToday(), to };
+  }
+}
+
+const STATUS_PILL: Record<
+  "open" | "closed" | "none",
+  { label: string; variant: Parameters<typeof Badge>[0]["variant"] }
+> = {
+  open: { label: "Caja abierta", variant: "income" },
+  closed: { label: "Caja cerrada", variant: "secondary" },
+  none: { label: "Sin caja", variant: "destructive" },
+};
+
+export default function DashboardPage() {
   const trpc = useTRPC();
-  const { data, isLoading } = useQuery(trpc.dashboard.stats.queryOptions());
+
+  const { data: locations } = useQuery(trpc.locations.list.queryOptions());
+
+  const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
+  useEffect(() => {
+    setActiveLocationId(readActiveLocationCookie());
+  }, []);
+
+  const [preset, setPreset] = useState<RangePreset>("today");
+  const initialRange = presetRange("today");
+  const [from, setFrom] = useState<Date>(initialRange.from);
+  const [to, setTo] = useState<Date>(initialRange.to);
+
+  const applyPreset = (p: RangePreset) => {
+    setPreset(p);
+    if (p !== "custom") {
+      const r = presetRange(p);
+      setFrom(r.from);
+      setTo(r.to);
+    }
+  };
+
+  const queryInput = useMemo(
+    () => ({
+      locationId: activeLocationId ?? undefined,
+      rangeFrom: from,
+      rangeTo: to,
+    }),
+    [activeLocationId, from, to],
+  );
+
+  const { data, isLoading } = useQuery(
+    trpc.dashboard.stats.queryOptions(queryInput),
+  );
+
+  const activeLocationName = useMemo(() => {
+    if (!locations || activeLocationId == null) return null;
+    return locations.find((l) => l.id === activeLocationId)?.name ?? null;
+  }, [locations, activeLocationId]);
 
   if (isLoading || !data) {
-    return (
-      <div className="grid flex-1 items-start gap-6">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-28 mb-2" />
-                <Skeleton className="h-3 w-40" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-3 w-48" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-[280px] w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
-  const profitIsPositive = data.totalProfit >= 0;
+  const pill = STATUS_PILL[data.cashSession.status];
 
   return (
-    <div className="grid flex-1 items-start gap-6 min-w-0 overflow-hidden">
-      {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Revenue
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(data.totalRevenue)}
+    <div className="grid flex-1 items-start gap-6 min-w-0">
+      {/* Header */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPinIcon className="h-4 w-4" />
+              <span>{activeLocationName ?? "Todos los locales"}</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Completed income transactions
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Expenses
-            </CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(data.totalExpenses)}
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold">{data.business.name}</h1>
+              <Badge variant={pill.variant}>{pill.label}</Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Completed expense transactions
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-            {profitIsPositive ? (
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-500" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <RangePresetButtons active={preset} onChange={applyPreset} />
+            <RangeInputs
+              from={from}
+              to={to}
+              onFromChange={(d) => {
+                setPreset("custom");
+                setFrom(d);
+              }}
+              onToChange={(d) => {
+                setPreset("custom");
+                setTo(d);
+              }}
+            />
+            {data.cashSession.status === "none" && activeLocationId != null && (
+              <Button asChild size="sm">
+                <a href="/admin/cashier">Abrir caja</a>
+              </Button>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sales KPIs */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi
+          icon={<DollarSignIcon className="h-4 w-4" />}
+          title="Ventas (revenue)"
+          value={formatCurrency(data.sales.todayRevenue)}
+          hint={`${data.sales.todayCount} órdenes completadas`}
+        />
+        <Kpi
+          icon={<HashIcon className="h-4 w-4" />}
+          title="Cantidad de ventas"
+          value={String(data.sales.todayCount)}
+          hint="Solo process_status=complete"
+        />
+        <Kpi
+          icon={<BanIcon className="h-4 w-4" />}
+          title="Anuladas (revenue)"
+          value={formatCurrency(data.sales.voidedRevenue)}
+          hint={`${data.sales.voidedCount} órdenes anuladas`}
+          tone="warn"
+        />
+        <Kpi
+          icon={<HashIcon className="h-4 w-4" />}
+          title="Cantidad de anuladas"
+          value={String(data.sales.voidedCount)}
+          hint="process_status=void"
+          tone="warn"
+        />
+      </div>
+
+      {/* Cash session */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <Kpi
+          icon={<WalletIcon className="h-4 w-4" />}
+          title="Efectivo esperado"
+          value={formatCurrency(data.cashSession.expectedCash)}
+          hint={
+            data.cashSession.status === "none"
+              ? "Seleccioná un local para ver el detalle"
+              : "Caja del turno actual"
+          }
+        />
+        <Kpi
+          icon={<WalletIcon className="h-4 w-4" />}
+          title="Digital esperado"
+          value={formatCurrency(data.cashSession.expectedDigital)}
+          hint="Transferencias / tarjeta"
+        />
+        <Kpi
+          icon={<WalletIcon className="h-4 w-4" />}
+          title="Diferencia (al cierre)"
+          value={
+            data.cashSession.difference == null
+              ? "—"
+              : formatCurrency(data.cashSession.difference)
+          }
+          hint={
+            data.cashSession.status === "closed"
+              ? "Contado − Esperado"
+              : "Disponible al cerrar caja"
+          }
+          tone={
+            data.cashSession.difference == null
+              ? "neutral"
+              : data.cashSession.difference === 0
+                ? "neutral"
+                : "warn"
+          }
+        />
+      </div>
+
+      {/* Sales by payment method + Low stock */}
+      <div className="grid gap-6 lg:grid-cols-2 min-w-0">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>Ventas por método de pago</CardTitle>
+            <CardDescription>
+              Solo órdenes completadas dentro del rango.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div
-              className={`text-2xl font-bold ${profitIsPositive ? "text-emerald-600" : "text-red-600"}`}
-            >
-              {formatCurrency(data.totalProfit)}
+            {data.sales.byPaymentMethod.length === 0 ? (
+              <EmptyMessage message="Sin pagos registrados en el rango." />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Método</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.sales.byPaymentMethod.map((row) => (
+                    <TableRow key={row.paymentMethodId}>
+                      <TableCell>{row.name}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(row.total)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Stock bajo</CardTitle>
+                <CardDescription>
+                  Productos con menos de 5 unidades en cualquier local del
+                  negocio.
+                </CardDescription>
+              </div>
+              {data.inventory.lowStockCount > 0 && (
+                <Badge variant="destructive" className="gap-1">
+                  <AlertTriangleIcon className="h-3 w-3" />
+                  {data.inventory.lowStockCount}
+                </Badge>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Revenue from selling minus expenses
-            </p>
+          </CardHeader>
+          <CardContent>
+            {data.inventory.lowStock.length === 0 ? (
+              <EmptyMessage message="Sin alertas. Stock saludable." />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Local</TableHead>
+                    <TableHead className="text-right">Quedan</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.inventory.lowStock.map((row) => (
+                    <TableRow key={`${row.productId}-${row.locationId}`}>
+                      <TableCell>{row.productName}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {row.locationName}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-red-600">
+                        {row.quantityOnHand}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid gap-6 lg:grid-cols-2 min-w-0">
-        <CategoryPieChart
-          title="Revenue by Category"
-          description="Breakdown of income across categories"
-          data={data.revenueByCategory}
-        />
-
-        <CategoryPieChart
-          title="Expenses by Category"
-          description="Breakdown of expenses across categories"
-          data={data.expensesByCategory}
-        />
-
-        <ProfitMarginChart data={data.profitMargin} />
-        <CashFlowChart data={data.cashFlow} />
-      </div>
+      <Card>
+        <CardContent className="p-4 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">
+            Gastos del mes:
+          </span>{" "}
+          {formatCurrency(data.expensesPlaceholder.monthTotal)} —{" "}
+          {data.expensesPlaceholder.note}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-/** Reusable donut chart for category breakdowns. */
-function CategoryPieChart({
+function Kpi({
+  icon,
   title,
-  description,
-  data,
+  value,
+  hint,
+  tone = "neutral",
 }: {
+  icon: React.ReactNode;
   title: string;
-  description: string;
-  data: Record<string, number>;
+  value: string;
+  hint?: string;
+  tone?: "neutral" | "warn";
 }) {
-  const entries = Object.entries(data);
-  const total = entries.reduce((sum, [, v]) => sum + v, 0);
-
-  const chartData = entries.map(([category, value], i) => ({
-    category,
-    value,
-    fill: CHART_COLORS[i % CHART_COLORS.length],
-  }));
-
-  const chartConfig: ChartConfig = Object.fromEntries(
-    entries.map(([category], i) => [
-      category,
-      {
-        label: category.charAt(0).toUpperCase() + category.slice(1),
-        color: CHART_COLORS[i % CHART_COLORS.length],
-      },
-    ])
-  );
-
+  const valueClass =
+    tone === "warn" ? "text-amber-600" : "text-foreground";
   return (
-    <Card className="min-w-0 overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <span className="text-muted-foreground">{icon}</span>
       </CardHeader>
       <CardContent>
-        {entries.length === 0 ? (
-          <EmptyState message={`No ${title.toLowerCase()} data yet`} />
-        ) : (
-          <ChartContainer
-            config={chartConfig}
-            className="mx-auto aspect-square max-h-[280px]"
-          >
-            <PieChart>
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    nameKey="category"
-                    formatter={(value) => formatCurrency(Number(value))}
-                  />
-                }
-              />
-              <Pie
-                data={chartData}
-                dataKey="value"
-                nameKey="category"
-                innerRadius={60}
-                strokeWidth={2}
-                stroke="hsl(var(--background))"
-              >
-                <Label
-                  content={({ viewBox }) => {
-                    if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                      return (
-                        <text
-                          x={viewBox.cx}
-                          y={viewBox.cy}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                        >
-                          <tspan
-                            x={viewBox.cx}
-                            y={viewBox.cy}
-                            className="fill-foreground text-xl font-bold"
-                          >
-                            {formatCurrency(total)}
-                          </tspan>
-                          <tspan
-                            x={viewBox.cx}
-                            y={(viewBox.cy || 0) + 20}
-                            className="fill-muted-foreground text-xs"
-                          >
-                            Total
-                          </tspan>
-                        </text>
-                      );
-                    }
-                  }}
-                />
-              </Pie>
-              <ChartLegend content={<ChartLegendContent nameKey="category" />} />
-            </PieChart>
-          </ChartContainer>
-        )}
+        <div className={`text-2xl font-bold ${valueClass}`}>{value}</div>
+        {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
       </CardContent>
     </Card>
   );
 }
 
-function ProfitMarginChart({
-  data,
+function RangePresetButtons({
+  active,
+  onChange,
 }: {
-  data: { date: string; margin: number }[];
+  active: RangePreset;
+  onChange: (p: RangePreset) => void;
 }) {
-  const chartConfig = {
-    margin: {
-      label: "Margin %",
-      color: "hsl(var(--chart-1))",
-    },
-  } satisfies ChartConfig;
-
+  const items: { id: RangePreset; label: string }[] = [
+    { id: "today", label: "Hoy" },
+    { id: "week", label: "Semana" },
+    { id: "month", label: "Mes" },
+  ];
   return (
-    <Card className="min-w-0 overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle>Profit Margin</CardTitle>
-        <CardDescription>Daily profit margin percentage</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {data.length === 0 ? (
-          <EmptyState message="No profit margin data yet" />
-        ) : (
-          <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <BarChart accessibilityLayer data={data}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickLine={false}
-                tickMargin={10}
-                axisLine={false}
-                tickFormatter={formatShortDate}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => `${v}%`}
-                width={50}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(label) => formatShortDate(String(label))}
-                    formatter={(value) => `${value}%`}
-                  />
-                }
-              />
-              <Bar dataKey="margin" radius={[4, 4, 0, 0]}>
-                {data.map((entry, i) => (
-                  <Cell
-                    key={`cell-${i}`}
-                    fill={
-                      entry.margin >= 0
-                        ? "hsl(var(--chart-2))"
-                        : "hsl(var(--chart-5))"
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ChartContainer>
-        )}
-      </CardContent>
-    </Card>
+    <div className="inline-flex rounded-md border bg-background p-0.5">
+      {items.map((item) => (
+        <Button
+          key={item.id}
+          size="sm"
+          variant={active === item.id ? "default" : "ghost"}
+          className="h-7 px-3 text-xs"
+          onClick={() => onChange(item.id)}
+        >
+          {item.label}
+        </Button>
+      ))}
+    </div>
   );
 }
 
-function CashFlowChart({
-  data,
+function RangeInputs({
+  from,
+  to,
+  onFromChange,
+  onToChange,
 }: {
-  data: { date: string; amount: number }[];
+  from: Date;
+  to: Date;
+  onFromChange: (d: Date) => void;
+  onToChange: (d: Date) => void;
 }) {
-  const chartConfig = {
-    amount: {
-      label: "Amount",
-      color: "hsl(var(--chart-3))",
-    },
-  } satisfies ChartConfig;
-
   return (
-    <Card className="min-w-0 overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle>Cash Flow</CardTitle>
-        <CardDescription>Daily transaction volume</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {data.length === 0 ? (
-          <EmptyState message="No cash flow data yet" />
-        ) : (
-          <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <AreaChart
-              accessibilityLayer
-              data={data}
-              margin={{ left: 12, right: 12 }}
-            >
-              <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                tickFormatter={formatShortDate}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => `$${v}`}
-                width={60}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(label) => formatShortDate(String(label))}
-                    formatter={(value) => formatCurrency(Number(value))}
-                  />
-                }
-              />
-              <defs>
-                <linearGradient id="fillAmount" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor="var(--color-amount)"
-                    stopOpacity={0.8}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor="var(--color-amount)"
-                    stopOpacity={0.1}
-                  />
-                </linearGradient>
-              </defs>
-              <Area
-                dataKey="amount"
-                type="monotone"
-                fill="url(#fillAmount)"
-                stroke="var(--color-amount)"
-                strokeWidth={2}
-              />
-            </AreaChart>
-          </ChartContainer>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-1">
+      <Input
+        type="date"
+        value={toInputValue(from)}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v) onFromChange(new Date(`${v}T00:00:00`));
+        }}
+        className="h-8 w-[140px]"
+      />
+      <span className="text-muted-foreground text-xs">→</span>
+      <Input
+        type="date"
+        value={toInputValue(to)}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v) onToChange(new Date(`${v}T23:59:59`));
+        }}
+        className="h-8 w-[140px]"
+      />
+    </div>
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyMessage({ message }: { message: string }) {
   return (
-    <div className="flex h-[280px] items-center justify-center">
+    <div className="flex h-[120px] items-center justify-center">
       <p className="text-sm text-muted-foreground">{message}</p>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="grid flex-1 items-start gap-6">
+      <Card>
+        <CardContent className="p-6">
+          <Skeleton className="h-10 w-2/3" />
+        </CardContent>
+      </Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="pb-2">
+              <Skeleton className="h-4 w-24" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-28 mb-2" />
+              <Skeleton className="h-3 w-40" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="pb-2">
+              <Skeleton className="h-5 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-[200px] w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
