@@ -34,6 +34,16 @@ const TABLES: PgTable[] = [
   // FK targets exist when DDL is applied in order.
   schema.inventoryBalances,
   schema.inventoryMovements,
+  // Batch 6: expenses (operational P&L) and procurements (inventory
+  // purchases). FK-safe order: expense_categories before expense_entries,
+  // suppliers before purchase_orders, purchase_orders before purchase_items.
+  // All reference businesses/locations/payment_methods/cash_sessions which
+  // are already declared above.
+  schema.expenseCategories,
+  schema.expenseEntries,
+  schema.suppliers,
+  schema.purchaseOrders,
+  schema.purchaseItems,
 ];
 
 // All identifiers are double-quoted to avoid clashes with Postgres reserved
