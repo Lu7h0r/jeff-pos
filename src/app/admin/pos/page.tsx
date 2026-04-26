@@ -14,288 +14,458 @@ import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2Icon, MinusIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react";
+import {
+  Loader2Icon,
+  MinusIcon,
+  PlusIcon,
+  SearchIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import Link from "next/link";
 import { useTRPC } from "@/lib/trpc/client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { RouterOutputs } from "@/lib/trpc/router";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 
-type Product = RouterOutputs["products"]["list"][number];
-type POSProduct = Pick<Product, "id" | "name" | "price" | "in_stock"> & { category: string; quantity: number };
+const ACTIVE_LOCATION_COOKIE = "jeff_active_location_id";
+
+type CartItem = {
+  productId: number;
+  name: string;
+  unitPrice: number;
+  onHand: number;
+  quantity: number;
+};
+
+type PaymentLine = {
+  paymentMethodId: number | null;
+  amount: number;
+};
+
+function readLocationCookie(): number | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${ACTIVE_LOCATION_COOKIE}=`));
+  if (!match) return null;
+  const value = Number(match.split("=")[1]);
+  return Number.isFinite(value) ? value : null;
+}
 
 export default function POSPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { data: products = [], isLoading: loadingProducts } = useQuery(trpc.products.list.queryOptions());
-  const { data: customers = [], isLoading: loadingCustomers } = useQuery(trpc.customers.list.queryOptions());
-  const { data: paymentMethods = [], isLoading: loadingMethods } = useQuery(trpc.paymentMethods.list.queryOptions());
+  const locationId = useMemo(() => readLocationCookie(), []);
 
-  const loading = loadingProducts || loadingCustomers || loadingMethods;
+  // Cash session is the gate. If null, the POS is locked behind a hint.
+  const sessionQuery = useQuery({
+    ...trpc.cashSessions.current.queryOptions({ locationId: locationId ?? 0 }),
+    enabled: locationId != null,
+  });
 
-  const createOrderMutation = useMutation(trpc.orders.create.mutationOptions({
-    onSuccess: () => {
-      queryClient.invalidateQueries(trpc.orders.list.queryOptions());
-      queryClient.invalidateQueries(trpc.products.list.queryOptions());
-      toast.success("Order created successfully");
-      setSelectedProducts([]);
-      setSelectedCustomer(null);
-      setPaymentMethod(null);
-    },
-    onError: (err) => toast.error(err.message || "Failed to create order"),
-  }));
+  const balancesQuery = useQuery({
+    ...trpc.inventory.balancesByLocation.queryOptions({
+      locationId: locationId ?? 0,
+    }),
+    enabled: locationId != null && sessionQuery.data != null,
+  });
 
-  const [selectedProducts, setSelectedProducts] = useState<POSProduct[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<{ id: number; name: string } | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<{ id: number; name: string } | null>(null);
-  const [productSearch, setProductSearch] = useState("");
+  const customersQuery = useQuery(trpc.customers.list.queryOptions());
+  const paymentMethodsQuery = useQuery(trpc.paymentMethods.list.queryOptions());
 
-  const filteredProducts = useMemo(() => {
-    if (!productSearch.trim()) return products;
-    const q = productSearch.toLowerCase();
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || (p.category ?? "").toLowerCase().includes(q)
-    );
-  }, [products, productSearch]);
-
-  const handleSelectProduct = (productId: number | string) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-    if (product.in_stock <= 0) {
-      toast.error(`${product.name} is out of stock`);
-      return;
-    }
-    const existing = selectedProducts.find((p) => p.id === productId);
-    if (existing && existing.quantity >= product.in_stock) {
-      toast.error(`Only ${product.in_stock} units of ${product.name} available`);
-      return;
-    }
-    if (existing) {
-      setSelectedProducts(
-        selectedProducts.map((p) =>
-          p.id === productId ? { ...p, quantity: p.quantity + 1 } : p
-        )
-      );
-    } else {
-      setSelectedProducts([...selectedProducts, { id: product.id, name: product.name, price: product.price, in_stock: product.in_stock, category: product.category ?? "", quantity: 1 }]);
-    }
-  };
-
-  const handleSelectCustomer = (customerId: number | string) => {
-    const customer = customers.find((c) => c.id === customerId);
-    if (customer) setSelectedCustomer(customer);
-  };
-
-  const handleSelectPaymentMethod = (paymentMethodId: number | string) => {
-    const method = paymentMethods.find((pm) => pm.id === paymentMethodId);
-    if (method) setPaymentMethod(method);
-  };
-
-  const handleQuantityChange = (productId: number, delta: number) => {
-    const product = products.find((p) => p.id === productId);
-    setSelectedProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== productId) return p;
-        const newQty = p.quantity + delta;
-        if (newQty <= 0) return p;
-        if (product && newQty > product.in_stock) {
-          toast.error(`Only ${product.in_stock} units available`);
-          return p;
-        }
-        return { ...p, quantity: newQty };
-      })
-    );
-  };
-
-  const handleRemoveProduct = (productId: number) => {
-    setSelectedProducts(selectedProducts.filter((p) => p.id !== productId));
-  };
-
-  const total = selectedProducts.reduce(
-    (sum, product) => sum + product.price * product.quantity,
-    0
+  const createOrderMutation = useMutation(
+    trpc.orders.create.mutationOptions({
+      onSuccess: (order) => {
+        queryClient.invalidateQueries(trpc.orders.list.queryOptions());
+        queryClient.invalidateQueries(
+          trpc.inventory.balancesByLocation.queryOptions({
+            locationId: locationId ?? 0,
+          }),
+        );
+        queryClient.invalidateQueries(
+          trpc.cashSessions.current.queryOptions({
+            locationId: locationId ?? 0,
+          }),
+        );
+        toast.success(
+          `Order #${order.id} created — total $${(order.total_amount / 100).toFixed(2)}`,
+        );
+        setCart([]);
+        setSelectedCustomerId(null);
+        setPaymentLines([{ paymentMethodId: null, amount: 0 }]);
+      },
+      onError: (err) => toast.error(err.message || "Failed to create order"),
+    }),
   );
 
-  const canCreate = selectedProducts.length > 0 && selectedCustomer && paymentMethod;
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
+    null,
+  );
+  const [productSearch, setProductSearch] = useState("");
+  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([
+    { paymentMethodId: null, amount: 0 },
+  ]);
 
-  const handleCreateOrder = () => {
-    if (!canCreate) return;
-    createOrderMutation.mutate({
-      customerId: selectedCustomer!.id,
-      paymentMethodId: paymentMethod!.id,
-      products: selectedProducts.map((p) => ({
-        id: p.id,
-        quantity: p.quantity,
-        price: p.price,
-      })),
-      total,
+  const balances = balancesQuery.data ?? [];
+  const filteredBalances = useMemo(() => {
+    const inStock = balances.filter((b) => b.quantity_on_hand > 0);
+    if (!productSearch.trim()) return inStock;
+    const q = productSearch.toLowerCase();
+    return inStock.filter(
+      (b) =>
+        b.product_name.toLowerCase().includes(q) ||
+        (b.sku ?? "").toLowerCase().includes(q),
+    );
+  }, [balances, productSearch]);
+
+  const total = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0);
+  const paymentsTotal = paymentLines.reduce(
+    (sum, p) => sum + (Number.isFinite(p.amount) ? p.amount : 0),
+    0,
+  );
+  const paymentsMatch = paymentsTotal === total && total > 0;
+  const allPaymentsAssigned = paymentLines.every(
+    (p) => p.paymentMethodId != null && p.amount > 0,
+  );
+  const canCreate =
+    cart.length > 0 &&
+    paymentLines.length > 0 &&
+    paymentsMatch &&
+    allPaymentsAssigned;
+
+  const handleAddProduct = (productId: number | string) => {
+    const balance = balances.find((b) => b.product_id === Number(productId));
+    if (!balance) return;
+    if (balance.quantity_on_hand <= 0) {
+      toast.error(`${balance.product_name} is out of stock`);
+      return;
+    }
+    setCart((prev) => {
+      const existing = prev.find((c) => c.productId === balance.product_id);
+      if (existing) {
+        if (existing.quantity >= balance.quantity_on_hand) {
+          toast.error(`Only ${balance.quantity_on_hand} units available`);
+          return prev;
+        }
+        return prev.map((c) =>
+          c.productId === balance.product_id
+            ? { ...c, quantity: c.quantity + 1 }
+            : c,
+        );
+      }
+      // unitPrice is read at create time from the DB; we still cache it
+      // here for the cart total preview. The server recomputes from DB.
+      return [
+        ...prev,
+        {
+          productId: balance.product_id,
+          name: balance.product_name,
+          unitPrice: 0,
+          onHand: balance.quantity_on_hand,
+          quantity: 1,
+        },
+      ];
     });
   };
 
-  if (loading) {
+  const handleQuantityChange = (productId: number, delta: number) => {
+    setCart((prev) =>
+      prev.map((c) => {
+        if (c.productId !== productId) return c;
+        const next = c.quantity + delta;
+        if (next <= 0) return c;
+        if (next > c.onHand) {
+          toast.error(`Only ${c.onHand} units available`);
+          return c;
+        }
+        return { ...c, quantity: next };
+      }),
+    );
+  };
+
+  const handleRemove = (productId: number) =>
+    setCart((prev) => prev.filter((c) => c.productId !== productId));
+
+  const updatePaymentLine = (index: number, patch: Partial<PaymentLine>) =>
+    setPaymentLines((prev) =>
+      prev.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    );
+
+  const removePaymentLine = (index: number) =>
+    setPaymentLines((prev) => prev.filter((_, i) => i !== index));
+
+  const addPaymentLine = () =>
+    setPaymentLines((prev) => [
+      ...prev,
+      { paymentMethodId: null, amount: 0 },
+    ]);
+
+  const handleCreate = () => {
+    if (!canCreate) return;
+    createOrderMutation.mutate({
+      locationId: locationId!,
+      customerId: selectedCustomerId ?? undefined,
+      items: cart.map((c) => ({
+        productId: c.productId,
+        quantity: c.quantity,
+      })),
+      paymentLines: paymentLines.map((p) => ({
+        paymentMethodId: p.paymentMethodId!,
+        amount: p.amount,
+      })),
+    });
+  };
+
+  if (locationId == null) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>POS unavailable</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            No active location. Pick a location in the top bar before opening
+            the POS.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (sessionQuery.isLoading) {
     return (
       <div className="container mx-auto p-4 space-y-4">
-        <Card>
-          <CardHeader><Skeleton className="h-6 w-32" /></CardHeader>
-          <CardContent className="flex gap-4">
-            <Skeleton className="h-10 flex-1" />
-            <Skeleton className="h-10 flex-1" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><Skeleton className="h-6 w-24" /></CardHeader>
-          <CardContent className="space-y-3">
-            <Skeleton className="h-10 w-full" />
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-4 w-20" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <Skeleton className="h-32 w-full" />
       </div>
     );
   }
 
-  return (
-    <div className="w-full max-w-4xl mx-auto">
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>Sale Details</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="flex-1">
-            <Combobox
-              items={customers}
-              placeholder="Select Customer"
-              onSelect={handleSelectCustomer}
-            />
-          </div>
-          <div className="flex-1">
-            <Combobox
-              items={paymentMethods}
-              placeholder="Select Payment Method"
-              onSelect={handleSelectPaymentMethod}
-            />
-          </div>
-        </CardContent>
-      </Card>
+  if (!sessionQuery.data) {
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Products</CardTitle>
-          <div className="flex flex-col sm:flex-row gap-3 !mt-4">
-            <div className="relative flex-1">
-              <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search products..."
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Combobox
-              items={filteredProducts.map((p) => ({
-                id: p.id,
-                name: `${p.name} — $${(p.price / 100).toFixed(2)} (${p.in_stock} in stock)`,
-              }))}
-              placeholder="Add Product"
-              noSelect
-              onSelect={handleSelectProduct}
+          <CardTitle>No open cash session</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            You cannot create a sale without an open cash session at this
+            location. Open one in the cashier page first.
+          </p>
+          <Link
+            href="/admin/cashier"
+            className="inline-flex items-center text-primary underline"
+          >
+            Go to cashier
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const customers = customersQuery.data ?? [];
+  const paymentMethods = paymentMethodsQuery.data ?? [];
+
+  return (
+    <div className="w-full max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Catalogue (in-stock)</CardTitle>
+          <div className="relative !mt-4">
+            <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search by name or SKU"
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              className="pl-8"
             />
           </div>
         </CardHeader>
         <CardContent>
-          {selectedProducts.length === 0 ? (
-            <div className="flex h-32 items-center justify-center text-muted-foreground text-sm">
-              Select products above to add them to the order
+          <Combobox
+            items={filteredBalances.map((b) => ({
+              id: b.product_id,
+              name: `${b.product_name} (${b.quantity_on_hand} on hand)`,
+            }))}
+            placeholder="Add to cart"
+            noSelect
+            onSelect={handleAddProduct}
+          />
+          <div className="mt-3 max-h-72 overflow-y-auto text-sm">
+            {filteredBalances.length === 0 ? (
+              <p className="text-muted-foreground">No products in stock.</p>
+            ) : (
+              <ul className="space-y-1">
+                {filteredBalances.map((b) => (
+                  <li
+                    key={b.product_id}
+                    className="flex justify-between border-b py-1"
+                  >
+                    <span>{b.product_name}</span>
+                    <Badge
+                      variant={b.quantity_on_hand > 5 ? "default" : "destructive"}
+                    >
+                      {b.quantity_on_hand}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cart</CardTitle>
+            <div className="!mt-4">
+              <Combobox
+                items={customers}
+                placeholder="Walk-in (no customer)"
+                onSelect={(id) => setSelectedCustomerId(Number(id))}
+              />
             </div>
-          ) : (
-            <div className="overflow-x-auto">
+          </CardHeader>
+          <CardContent>
+            {cart.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Add a product from the catalogue.
+              </p>
+            ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product</TableHead>
-                    <TableHead className="hidden sm:table-cell">Price</TableHead>
-                    <TableHead className="hidden md:table-cell">Stock</TableHead>
                     <TableHead>Qty</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedProducts.map((product) => {
-                    const source = products.find((p) => p.id === product.id);
-                    return (
-                      <TableRow key={product.id}>
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell className="hidden sm:table-cell">${(product.price / 100).toFixed(2)}</TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <Badge variant={source && source.in_stock > 5 ? "default" : "destructive"}>
-                            {source?.in_stock ?? 0}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-7 w-7"
-                              onClick={() => handleQuantityChange(product.id, -1)}
-                              disabled={product.quantity <= 1}
-                            >
-                              <MinusIcon className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center tabular-nums">{product.quantity}</span>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-7 w-7"
-                              onClick={() => handleQuantityChange(product.id, 1)}
-                              disabled={source ? product.quantity >= source.in_stock : false}
-                            >
-                              <PlusIcon className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          ${(product.quantity * product.price / 100).toFixed(2)}
-                        </TableCell>
-                        <TableCell>
+                  {cart.map((c) => (
+                    <TableRow key={c.productId}>
+                      <TableCell>{c.name}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
                           <Button
-                            variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleRemoveProduct(product.id)}
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              handleQuantityChange(c.productId, -1)
+                            }
+                            disabled={c.quantity <= 1}
                           >
-                            <Trash2Icon className="h-4 w-4" />
-                            <span className="sr-only">Remove</span>
+                            <MinusIcon className="h-3 w-3" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                          <span className="w-8 text-center">{c.quantity}</span>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={() => handleQuantityChange(c.productId, 1)}
+                            disabled={c.quantity >= c.onHand}
+                          >
+                            <PlusIcon className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemove(c.productId)}
+                        >
+                          <Trash2Icon className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
-            </div>
-          )}
-          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t pt-4">
-            <strong className="text-lg">Total: ${(total / 100).toFixed(2)}</strong>
-            <Button
-              onClick={handleCreateOrder}
-              disabled={!canCreate || createOrderMutation.isPending}
-              size="lg"
-              className="w-full sm:w-auto"
-            >
-              {createOrderMutation.isPending && <Loader2Icon className="h-4 w-4 animate-spin mr-2" />}
-              Create Order
+            )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              Server recomputes prices from the DB at sale time.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Payment</CardTitle>
+            <p className="text-xs text-muted-foreground !mt-2">
+              Sum of payments must match the cart total before confirming.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {paymentLines.map((line, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Combobox
+                    items={paymentMethods}
+                    placeholder="Method"
+                    onSelect={(id) =>
+                      updatePaymentLine(index, {
+                        paymentMethodId: Number(id),
+                      })
+                    }
+                  />
+                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  className="w-32"
+                  value={line.amount === 0 ? "" : line.amount}
+                  onChange={(e) =>
+                    updatePaymentLine(index, {
+                      amount: Math.max(0, Math.floor(Number(e.target.value) || 0)),
+                    })
+                  }
+                  placeholder="0"
+                />
+                {paymentLines.length > 1 ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePaymentLine(index)}
+                  >
+                    <Trash2Icon className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            <Button variant="outline" size="sm" onClick={addPaymentLine}>
+              <PlusIcon className="h-3 w-3 mr-1" /> Add payment method
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="border-t pt-3 flex items-center justify-between">
+              <span className="text-sm">Cart total</span>
+              <strong>${(total / 100).toFixed(2)}</strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Payments total</span>
+              <strong className={paymentsMatch ? "" : "text-destructive"}>
+                ${(paymentsTotal / 100).toFixed(2)}
+              </strong>
+            </div>
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={!canCreate || createOrderMutation.isPending}
+              onClick={handleCreate}
+            >
+              {createOrderMutation.isPending ? (
+                <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Confirm sale
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
