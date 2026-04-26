@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 
 import { logout } from "@/app/login/actions";
+import { LocationSelector } from "@/components/location-selector";
 
 interface NavItem {
   href: string;
@@ -79,7 +80,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           <span className="sr-only">Admin Panel</span>
         </Link>
         <h1 className="text-lg sm:text-xl font-bold truncate">{pageNames[pathname]}</h1>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <LocationSelector />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
