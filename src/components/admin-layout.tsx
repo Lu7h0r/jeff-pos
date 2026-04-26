@@ -29,6 +29,9 @@ import {
   ShoppingBagIcon,
   CreditCardIcon,
   WarehouseIcon,
+  ReceiptIcon,
+  TruckIcon,
+  ShoppingBasketIcon,
   MenuIcon,
   XIcon,
   type LucideIcon,
@@ -51,6 +54,9 @@ const navItems: NavItem[] = [
   { href: "/admin/customers", label: "Customers", icon: UsersIcon },
   { href: "/admin/orders", label: "Orders", icon: ShoppingBagIcon },
   { href: "/admin/payment-methods", label: "Payment Methods", icon: CreditCardIcon },
+  { href: "/admin/expenses", label: "Expenses", icon: ReceiptIcon },
+  { href: "/admin/suppliers", label: "Suppliers", icon: TruckIcon },
+  { href: "/admin/purchases", label: "Purchases", icon: ShoppingBasketIcon },
   { href: "/admin/pos", label: "Point of Sale", icon: ShoppingCartIcon },
 ];
 
