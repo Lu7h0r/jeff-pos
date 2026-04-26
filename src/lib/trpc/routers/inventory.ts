@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
 import { ownerOrManager } from "../role-guards";
+import { assertLocationAllowed } from "../scope-guards";
 import { db } from "@/lib/db";
 import {
   inventoryBalances,
@@ -111,6 +112,7 @@ export const inventoryRouter = router({
         });
       }
 
+      assertLocationAllowed(ctx, resolved);
       await assertLocationAccess(ctx.user.id, resolved);
 
       const rows = await db
@@ -150,6 +152,7 @@ export const inventoryRouter = router({
     )
     .output(balanceRowSchema)
     .mutation(async ({ ctx, input }) => {
+      assertLocationAllowed(ctx, input.locationId);
       const loc = await assertLocationAccess(ctx.user.id, input.locationId);
 
       const [product] = await db
@@ -274,6 +277,8 @@ export const inventoryRouter = router({
         });
       }
 
+      assertLocationAllowed(ctx, input.fromLocationId);
+      assertLocationAllowed(ctx, input.toLocationId);
       const fromLoc = await assertLocationAccess(ctx.user.id, input.fromLocationId);
       const toLoc = await assertLocationAccess(ctx.user.id, input.toLocationId);
 
@@ -431,6 +436,7 @@ export const inventoryRouter = router({
         });
       }
 
+      assertLocationAllowed(ctx, resolved);
       await assertLocationAccess(ctx.user.id, resolved);
 
       const conditions = [eq(inventoryMovements.location_id, resolved)];

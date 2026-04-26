@@ -11,7 +11,8 @@ import {
   cashMovements,
   paymentMethods,
 } from "@/lib/db/schema";
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
+import { assertLocationAllowed } from "../scope-guards";
 
 const rentalStatusSchema = z.enum(["scheduled", "completed", "cancelled"]);
 
@@ -89,8 +90,17 @@ export const stationRentalsRouter = router({
     .query(async ({ ctx, input }) => {
       const businessId = requireBusiness(ctx.activeBusinessId);
       const conditions = [eq(stationRentals.business_id, businessId)];
-      if (input.locationId !== undefined)
+      if (input.locationId !== undefined) {
+        assertLocationAllowed(ctx, input.locationId);
         conditions.push(eq(stationRentals.location_id, input.locationId));
+      } else if (
+        ctx.isLocationScoped &&
+        ctx.effectiveLocationIds.length > 0
+      ) {
+        conditions.push(
+          inArray(stationRentals.location_id, ctx.effectiveLocationIds),
+        );
+      }
       if (input.rangeFrom !== undefined)
         conditions.push(gte(stationRentals.start_at, input.rangeFrom));
       if (input.rangeTo !== undefined)
@@ -155,6 +165,7 @@ export const stationRentalsRouter = router({
           message: "Workstation belongs to a different business",
         });
       }
+      assertLocationAllowed(ctx, ws.location_id);
 
       const [staff] = await db
         .select()
@@ -324,6 +335,7 @@ export const stationRentalsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const businessId = requireBusiness(ctx.activeBusinessId);
       const rental = await loadOwned(input.id, businessId);
+      assertLocationAllowed(ctx, rental.location_id);
       if (rental.status !== "scheduled") {
         throw new TRPCError({
           code: "CONFLICT",
@@ -357,6 +369,7 @@ export const stationRentalsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const businessId = requireBusiness(ctx.activeBusinessId);
       const rental = await loadOwned(input.id, businessId);
+      assertLocationAllowed(ctx, rental.location_id);
       if (rental.status === "cancelled") {
         throw new TRPCError({
           code: "CONFLICT",

@@ -16,6 +16,7 @@ import {
   inventoryMovements,
 } from "@/lib/db/schema";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
+import { assertLocationAllowed } from "../scope-guards";
 
 const purchaseStatusSchema = z.enum(["draft", "received", "cancelled"]);
 
@@ -79,7 +80,15 @@ export const purchasesRouter = router({
       const businessId = requireBusiness(ctx.activeBusinessId);
       const conditions = [eq(purchaseOrders.business_id, businessId)];
       if (input.locationId !== undefined) {
+        assertLocationAllowed(ctx, input.locationId);
         conditions.push(eq(purchaseOrders.location_id, input.locationId));
+      } else if (
+        ctx.isLocationScoped &&
+        ctx.effectiveLocationIds.length > 0
+      ) {
+        conditions.push(
+          inArray(purchaseOrders.location_id, ctx.effectiveLocationIds),
+        );
       }
       if (input.status !== undefined) {
         conditions.push(eq(purchaseOrders.status, input.status));
@@ -125,6 +134,7 @@ export const purchasesRouter = router({
     .output(purchaseOrderWithItemsSchema)
     .mutation(async ({ ctx, input }) => {
       const businessId = requireBusiness(ctx.activeBusinessId);
+      assertLocationAllowed(ctx, input.locationId);
 
       const [loc] = await db
         .select()
@@ -353,6 +363,7 @@ export const purchasesRouter = router({
           message: "Purchase order belongs to a different business",
         });
       }
+      assertLocationAllowed(ctx, order.location_id);
       if (order.status !== "draft") {
         throw new TRPCError({
           code: "CONFLICT",
@@ -467,6 +478,7 @@ export const purchasesRouter = router({
           message: "Purchase order belongs to a different business",
         });
       }
+      assertLocationAllowed(ctx, order.location_id);
       if (order.status !== "draft") {
         throw new TRPCError({
           code: "CONFLICT",

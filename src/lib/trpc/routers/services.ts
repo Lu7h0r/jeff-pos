@@ -10,8 +10,9 @@ import {
   orderItems,
   orders,
 } from "@/lib/db/schema";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, inArray } from "drizzle-orm";
 import { computeShares } from "../commission-split";
+import { assertLocationAllowed } from "../scope-guards";
 
 const serviceKindSchema = z.enum([
   "tattoo",
@@ -293,6 +294,7 @@ export const servicesRouter = router({
           message: "Order belongs to a different business",
         });
       }
+      assertLocationAllowed(ctx, order.location_id);
 
       const [staff] = await db
         .select()
@@ -385,8 +387,17 @@ export const servicesRouter = router({
         conditions.push(
           eq(serviceSales.staff_member_id, input.staffMemberId),
         );
-      if (input.locationId !== undefined)
+      if (input.locationId !== undefined) {
+        assertLocationAllowed(ctx, input.locationId);
         conditions.push(eq(orders.location_id, input.locationId));
+      } else if (
+        ctx.isLocationScoped &&
+        ctx.effectiveLocationIds.length > 0
+      ) {
+        conditions.push(
+          inArray(orders.location_id, ctx.effectiveLocationIds),
+        );
+      }
       if (input.rangeFrom !== undefined)
         conditions.push(gte(serviceSales.created_at, input.rangeFrom));
       if (input.rangeTo !== undefined)

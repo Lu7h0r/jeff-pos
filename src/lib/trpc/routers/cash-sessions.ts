@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
 import { operationalRole } from "../role-guards";
+import { assertLocationAllowed } from "../scope-guards";
 import { db } from "@/lib/db";
 import { cashSessions, locations, businessMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -82,6 +83,7 @@ export const cashSessionsRouter = router({
     )
     .output(cashSessionSchema)
     .mutation(async ({ ctx, input }) => {
+      assertLocationAllowed(ctx, input.locationId);
       const loc = await assertLocationAccess(ctx.user.id, input.locationId);
 
       const [existingOpen] = await db
@@ -134,6 +136,7 @@ export const cashSessionsRouter = router({
     .input(z.object({ locationId: z.number().int().positive() }))
     .output(cashSessionSchema.nullable())
     .query(async ({ ctx, input }) => {
+      assertLocationAllowed(ctx, input.locationId);
       const loc = await assertLocationAccess(ctx.user.id, input.locationId);
 
       const [open] = await db
@@ -185,6 +188,8 @@ export const cashSessionsRouter = router({
           message: "Cash session not found",
         });
       }
+
+      assertLocationAllowed(ctx, session.location_id);
 
       const [membership] = await db
         .select({ id: businessMembers.id })

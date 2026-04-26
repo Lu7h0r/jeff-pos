@@ -11,7 +11,8 @@ import {
   paymentMethods,
   locations,
 } from "@/lib/db/schema";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, inArray } from "drizzle-orm";
+import { assertLocationAllowed } from "../scope-guards";
 
 // Allowed enum values (single source of truth at zod layer).
 const expenseKindSchema = z.enum(["operational", "recurring", "one_off"]);
@@ -139,7 +140,20 @@ const entriesRouter = router({
 
       const conditions = [eq(expenseEntries.business_id, businessId)];
       if (input.locationId !== undefined) {
+        assertLocationAllowed(ctx, input.locationId);
         conditions.push(eq(expenseEntries.location_id, input.locationId));
+      } else if (
+        ctx.isLocationScoped &&
+        ctx.effectiveLocationIds.length > 0
+      ) {
+        // DA-25: a granular user without an explicit locationId still must
+        // not see entries from sedes outside their effective scope. NULL
+        // location entries are scoped only by business_id (operational
+        // overhead, no per-location attribution) and are excluded here on
+        // purpose — granular users can re-query with a specific location.
+        conditions.push(
+          inArray(expenseEntries.location_id, ctx.effectiveLocationIds),
+        );
       }
       if (input.rangeFrom !== undefined) {
         conditions.push(gte(expenseEntries.incurred_at, input.rangeFrom));
@@ -217,6 +231,7 @@ const entriesRouter = router({
       }
 
       if (input.locationId !== undefined) {
+        assertLocationAllowed(ctx, input.locationId);
         const [loc] = await db
           .select()
           .from(locations)

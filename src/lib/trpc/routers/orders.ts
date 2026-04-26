@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
 import { operationalRole, ownerOrManager } from "../role-guards";
+import { assertLocationAllowed } from "../scope-guards";
 import { db } from "@/lib/db";
 import {
   orders,
@@ -109,7 +110,13 @@ export const ordersRouter = router({
     .query(async ({ ctx }) => {
       const rows = ctx.activeBusinessId != null
         ? await db.query.orders.findMany({
-            where: eq(orders.business_id, ctx.activeBusinessId),
+            where:
+              ctx.isLocationScoped && ctx.effectiveLocationIds.length > 0
+                ? and(
+                    eq(orders.business_id, ctx.activeBusinessId),
+                    inArray(orders.location_id, ctx.effectiveLocationIds),
+                  )
+                : eq(orders.business_id, ctx.activeBusinessId),
             with: { customer: { columns: { name: true } } },
           })
         : await db.query.orders.findMany({
@@ -137,6 +144,7 @@ export const ordersRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
       }
       await assertMembership(ctx.user.id, order.business_id);
+      assertLocationAllowed(ctx, order.location_id);
 
       const items = await db
         .select()
@@ -195,6 +203,8 @@ export const ordersRouter = router({
     )
     .output(orderFullSchema)
     .mutation(async ({ ctx, input }) => {
+      assertLocationAllowed(ctx, input.locationId);
+
       const [loc] = await db
         .select()
         .from(locations)
@@ -489,6 +499,7 @@ export const ordersRouter = router({
       }
 
       await assertMembership(ctx.user.id, order.business_id);
+      assertLocationAllowed(ctx, order.location_id);
 
       if (order.process_status === "void") {
         throw new TRPCError({
@@ -665,6 +676,7 @@ export const ordersRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
       }
       await assertMembership(ctx.user.id, existing.business_id);
+      assertLocationAllowed(ctx, existing.location_id);
 
       const [updated] = await db
         .update(orders)

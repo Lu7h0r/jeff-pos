@@ -4,7 +4,8 @@ import { protectedProcedure, router } from "../init";
 import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
 import { workstations, locations } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
+import { assertLocationAllowed } from "../scope-guards";
 
 const workstationKindSchema = z.enum(["tattoo", "piercing", "general"]);
 
@@ -93,7 +94,15 @@ export const workstationsRouter = router({
         eq(workstations.archived, false),
       ];
       if (locId != null) {
+        assertLocationAllowed(ctx, locId);
         conditions.push(eq(workstations.location_id, locId));
+      } else if (
+        ctx.isLocationScoped &&
+        ctx.effectiveLocationIds.length > 0
+      ) {
+        conditions.push(
+          inArray(workstations.location_id, ctx.effectiveLocationIds),
+        );
       }
       const rows = await db
         .select()
@@ -122,6 +131,7 @@ export const workstationsRouter = router({
     .output(workstationSchema)
     .mutation(async ({ ctx, input }) => {
       const businessId = requireBusiness(ctx.activeBusinessId);
+      assertLocationAllowed(ctx, input.locationId);
       await assertLocation(input.locationId, businessId);
 
       const [created] = await db
@@ -155,7 +165,8 @@ export const workstationsRouter = router({
     .output(workstationSchema)
     .mutation(async ({ ctx, input }) => {
       const businessId = requireBusiness(ctx.activeBusinessId);
-      await loadOwned(input.id, businessId);
+      const existing = await loadOwned(input.id, businessId);
+      assertLocationAllowed(ctx, existing.location_id);
 
       const patch: Partial<typeof workstations.$inferInsert> = {};
       if (input.name !== undefined) patch.name = input.name.trim();
@@ -182,7 +193,8 @@ export const workstationsRouter = router({
     .output(workstationSchema)
     .mutation(async ({ ctx, input }) => {
       const businessId = requireBusiness(ctx.activeBusinessId);
-      await loadOwned(input.id, businessId);
+      const existing = await loadOwned(input.id, businessId);
+      assertLocationAllowed(ctx, existing.location_id);
 
       const [updated] = await db
         .update(workstations)

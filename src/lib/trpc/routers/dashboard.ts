@@ -12,7 +12,8 @@ import {
   inventoryBalances,
   products,
 } from "@/lib/db/schema";
-import { eq, and, gte, lte, desc, asc, lt, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, lt, sql, inArray } from "drizzle-orm";
+import { assertLocationAllowed } from "../scope-guards";
 
 // Threshold for "low stock" alerts. Hardcoded for MVP — when expenses/config
 // lands (Batch 6+) this should become a per-business setting.
@@ -119,6 +120,7 @@ export const dashboardRouter = router({
 
       let scopedLocationId: number | null = null;
       if (input.locationId !== undefined) {
+        assertLocationAllowed(ctx, input.locationId);
         const [loc] = await db
           .select()
           .from(locations)
@@ -132,6 +134,17 @@ export const dashboardRouter = router({
         }
         scopedLocationId = loc.id;
       }
+
+      // DA-25: when a granular user does not pass an explicit locationId,
+      // the aggregation must still be limited to their effective scope —
+      // otherwise dashboard.stats would silently leak totals from other
+      // sedes. We collapse the granular scope into the existing
+      // `scopedLocationId` path when there is exactly one location, and
+      // otherwise carry the full list through `scopedLocationIds`.
+      const granularScopeIds: number[] | null =
+        ctx.isLocationScoped && input.locationId === undefined
+          ? ctx.effectiveLocationIds
+          : null;
 
       const rangeFrom = input.rangeFrom ?? startOfToday();
       const rangeTo = input.rangeTo ?? new Date();
@@ -194,6 +207,8 @@ export const dashboardRouter = router({
       ];
       if (scopedLocationId != null) {
         orderScope.push(eq(orders.location_id, scopedLocationId));
+      } else if (granularScopeIds && granularScopeIds.length > 0) {
+        orderScope.push(inArray(orders.location_id, granularScopeIds));
       }
 
       const completeAgg = await db
@@ -238,6 +253,10 @@ export const dashboardRouter = router({
       if (scopedLocationId != null) {
         lowStockBaseScope.push(
           eq(inventoryBalances.location_id, scopedLocationId),
+        );
+      } else if (granularScopeIds && granularScopeIds.length > 0) {
+        lowStockBaseScope.push(
+          inArray(inventoryBalances.location_id, granularScopeIds),
         );
       }
 
