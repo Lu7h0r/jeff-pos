@@ -11,6 +11,9 @@ import {
   suppliers,
   purchaseOrders,
   purchaseItems,
+  staffMembers,
+  workstations,
+  stationRentals,
 } from "./schema";
 import { auth } from "../auth";
 import { eq, and, inArray, gte } from "drizzle-orm";
@@ -427,6 +430,153 @@ export async function seedJeff(): Promise<void> {
     }
   }
 
+  // ── Batch 8: staff, workstations, sample station rental ──────────────────
+  // Idempotent: staff matched by (business_id, display_name); workstations
+  // matched by (business_id, location_id, name); rental matched by notes.
+  const staffSeed: Array<{
+    displayName: string;
+    kind: "manager" | "artist";
+    commissionRate: number;
+    defaultSplit:
+      | "owner_direct"
+      | "staff_30_house_70"
+      | "staff_50_house_50"
+      | "staff_70_house_30"
+      | "manual";
+  }> = [
+    { displayName: "Jeff Owner", kind: "manager", commissionRate: 0, defaultSplit: "owner_direct" },
+    { displayName: "Sample Artist", kind: "artist", commissionRate: 3000, defaultSplit: "staff_30_house_70" },
+  ];
+
+  const existingStaff = await db
+    .select()
+    .from(staffMembers)
+    .where(eq(staffMembers.business_id, businessId));
+  const existingStaffByName = new Map(
+    existingStaff.map((s) => [s.display_name, s]),
+  );
+
+  let seededStaff = 0;
+  let sampleArtistId: number | null =
+    existingStaffByName.get("Sample Artist")?.id ?? null;
+
+  for (const s of staffSeed) {
+    if (existingStaffByName.has(s.displayName)) continue;
+    const [created] = await db
+      .insert(staffMembers)
+      .values({
+        business_id: businessId,
+        display_name: s.displayName,
+        kind: s.kind,
+        commission_rate: s.commissionRate,
+        default_split: s.defaultSplit,
+      })
+      .returning();
+    if (created.display_name === "Sample Artist") sampleArtistId = created.id;
+    seededStaff += 1;
+  }
+
+  let seededWorkstations = 0;
+  let cabina1Id: number | null = null;
+  if (amparo) {
+    const [existingCabina1] = await db
+      .select()
+      .from(workstations)
+      .where(
+        and(
+          eq(workstations.business_id, businessId),
+          eq(workstations.location_id, amparo.id),
+          eq(workstations.name, "Cabina 1"),
+        ),
+      )
+      .limit(1);
+    if (existingCabina1) {
+      cabina1Id = existingCabina1.id;
+    } else {
+      const [created] = await db
+        .insert(workstations)
+        .values({
+          business_id: businessId,
+          location_id: amparo.id,
+          name: "Cabina 1",
+          kind: "tattoo",
+        })
+        .returning();
+      cabina1Id = created.id;
+      seededWorkstations += 1;
+    }
+  }
+
+  if (britalia) {
+    const [existingBox] = await db
+      .select()
+      .from(workstations)
+      .where(
+        and(
+          eq(workstations.business_id, businessId),
+          eq(workstations.location_id, britalia.id),
+          eq(workstations.name, "Box Piercer"),
+        ),
+      )
+      .limit(1);
+    if (!existingBox) {
+      await db.insert(workstations).values({
+        business_id: businessId,
+        location_id: britalia.id,
+        name: "Box Piercer",
+        kind: "piercing",
+      });
+      seededWorkstations += 1;
+    }
+  }
+
+  let seededRental = 0;
+  const RENTAL_NOTE = "Sample station rental (Batch 8 seed)";
+  if (amparo && cabina1Id && sampleArtistId) {
+    const [existingRental] = await db
+      .select()
+      .from(stationRentals)
+      .where(
+        and(
+          eq(stationRentals.business_id, businessId),
+          eq(stationRentals.notes, RENTAL_NOTE),
+        ),
+      )
+      .limit(1);
+    if (!existingRental) {
+      const today = new Date();
+      const startAt = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+        14,
+        0,
+        0,
+      );
+      const endAt = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+        18,
+        0,
+        0,
+      );
+      await db.insert(stationRentals).values({
+        business_id: businessId,
+        location_id: amparo.id,
+        workstation_id: cabina1Id,
+        staff_member_id: sampleArtistId,
+        amount: 50_000_00,
+        start_at: startAt,
+        end_at: endAt,
+        status: "scheduled",
+        notes: RENTAL_NOTE,
+        created_by_user_id: ownerUserId,
+      });
+      seededRental = 1;
+    }
+  }
+
   console.log(
     `Seeded Jeff: business=${BUSINESS_SLUG} (id=${businessId}), ` +
       `owner=${JEFF_OWNER_EMAIL} (password=${JEFF_OWNER_PASSWORD}), ` +
@@ -436,7 +586,10 @@ export async function seedJeff(): Promise<void> {
       `expense_categories=+${seededCategories}, ` +
       `expense_entries=+${seededExpenses}, ` +
       `suppliers=+${seededSupplier}, ` +
-      `purchases=+${seededPurchase}`,
+      `purchases=+${seededPurchase}, ` +
+      `staff=+${seededStaff}, ` +
+      `workstations=+${seededWorkstations}, ` +
+      `station_rentals=+${seededRental}`,
   );
 }
 
