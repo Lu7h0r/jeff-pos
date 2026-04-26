@@ -100,11 +100,17 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | DA-12 | weighted-average cost no implementado | media | TBD (post-pilot real) | abierta |
 | DA-13 | `purchases.cancel` con sesion cerrada sin reversa | media | TBD | abierta |
 | DA-14 | `expense_entries` sin void | media | TBD | abierta |
-| DA-15 | `resolveActiveContext` no consulta `location_members` | media | post-Batch 8 | abierta |
+| DA-15 | `resolveActiveContext` no consulta `location_members` | media | auth-management | cerrada |
 | DA-16 | POS service attachment no transaccional con orders.create | media | TBD | abierta |
 | DA-17 | Splits de comision hardcoded en helper | baja | TBD | abierta |
 | DA-18 | Workstation availability sin vista calendario | baja | UX futuro | abierta |
 | DA-19 | Commission policy snapshot sin recompute pre-liquidacion | baja | UX futuro | abierta |
+| DA-20 | `team.invite` retorna password en texto plano | media | TBD (post Better Auth invite tokens) | abierta |
+| DA-21 | Multi-business switcher UI no existe | baja | UX futuro | abierta |
+| DA-22 | Exclusividad broad/granular sin enforcement DB | baja | post-Postgres real | abierta |
+| DA-23 | Generacion de password hardcoded, no via Better Auth reset | media | TBD | abierta |
+| DA-24 | Archive del ultimo owner posible (lockout risk) | alta | proximo cleanup auth | abierta |
+| DA-25 | Routers de inventory/orders/dashboard no auditados con effectiveLocationIds | media | proximo audit pass | abierta |
 
 ## DA-6 — `inventory_balances` sin UNIQUE compound
 
@@ -262,7 +268,15 @@ Recomendacion: A para MVP (mas estricto, evita confusion). B requiere training o
 
 **Resolucion:** post-Batch 8, sumar consulta a `location_members` cuando `locationId` esta resuelto. Si existe membership granular activa para esa location, sobrescribe el role en el contexto. Si no, usa el role del business membership.
 
-**Estado:** abierta. Bug de seguridad pasivo mientras Jeff opere solo con su user owner. Se vuelve real cuando contrate un cashier limitado a una sede.
+**Estado:** cerrada. Commit `40c7b32` (auth-management) reescribe `resolveActiveContext`:
+
+- Si user tiene `business_members` activo → broad scope (acceso a todas las locations del business).
+- Si user solo tiene `location_members` → granular scope (limitado a esos locationIds).
+- `effectiveLocationIds: number[]` expuesto en ctx para que routers filtren.
+- `isLocationScoped: boolean` flag para distinguir escenarios.
+- Tests `active-context.test.ts` cubren broad vs granular vs sin membership vs data integrity (cross-business locations).
+
+Complementado con `role-guards.ts` (middleware `requireRole` + presets ownerOnly/ownerOrManager/operationalRole/artistOrAbove) aplicado a 13 routers en commit `9efa185`. UI `/admin/team` (commits `60ec8ff` + `330657e`) permite invitar/listar/cambiar role/archivar miembros. `admin-layout.tsx` filtra nav segun role (`2801be5`).
 
 ## DA-16 — POS service attachment no es transaccional con `orders.create`
 
@@ -303,6 +317,94 @@ Recomendacion: A para MVP (mas estricto, evita confusion). B requiere training o
 **Resolucion:** endpoint `services.commissions.recompute({ commissionEstimateId })` que tome el split actual del staff y reemplace los amounts. Solo permitido en estado `estimated` (no en `liquidated`).
 
 **Estado:** abierta. UX de matiz, no critico.
+
+## DA-20 — `team.invite` retorna password en texto plano
+
+**Ubicacion:** `src/lib/trpc/routers/team.ts` mutation `team.invite`.
+
+**Impacto:** Para invitar un miembro nuevo, el endpoint genera password 14-char base64 y lo retorna ONCE en la response. El inviter (owner/manager) lo ve en pantalla y se lo pasa al invitado por WhatsApp/email/etc. Plain-text password en transito sobre canales no encriptados es riesgo de seguridad real.
+
+**Resolucion:** TBD. Migrar a magic-link / token de invitacion:
+
+1. `team.invite` genera token de un solo uso, guardado encriptado en una tabla `invitations` con expiry.
+2. Email-invite con link `https://app.jeff.studio/invite/<token>`.
+3. Invitado abre link, el frontend hace `team.acceptInvite(token, newPassword)` y crea su propia password.
+4. Fuera de banda nunca pasa la password.
+
+Requiere Better Auth feature de invite tokens o implementacion custom. Fuera de scope MVP.
+
+**Estado:** abierta. Aceptable mientras Jeff invite a su equipo conocido cara-a-cara.
+
+## DA-21 — Multi-business switcher UI no existe
+
+**Ubicacion:** `src/lib/trpc/active-context.ts`. Hardcoded a "oldest active membership".
+
+**Impacto:** Si vos sos miembro de Jeff Studio Y de otro negocio (ej: Lex consulta), el sistema te asigna deterministicamente el mas viejo. No hay UI para alternar.
+
+**Resolucion:** UX futuro. Componente similar al LocationSelector pero para business: dropdown en header (cuando user tiene >1 business membership), persiste cookie `jeff_active_business_id`, modifica `resolveActiveContext` para honrar el hint.
+
+**Estado:** abierta. No-bloqueante mientras el usuario solo tenga 1 negocio.
+
+## DA-22 — Exclusividad broad/granular sin enforcement DB
+
+**Ubicacion:** `business_members` y `location_members` tables. Hoy no hay constraint que prevenga que el mismo user_id tenga rows en ambas para el mismo business_id.
+
+**Impacto:** El codigo enforza la regla en `team.invite` (CONFLICT si ya existe membership opuesta) y en el resolver (broad gana sobre granular). Pero un INSERT directo en DB (drizzle studio, psql, migracion bug) puede crear el estado inconsistente.
+
+**Resolucion:** Cuando se migre a PostgreSQL real:
+
+1. CHECK constraint o trigger que verifique al insertar `business_members` o `location_members` que no haya rows existentes opuestas para ese (user, business).
+2. Documentar en schema.sql.
+
+**Estado:** abierta. Bug latente con probabilidad baja en single-process PGlite.
+
+## DA-23 — Password generado hardcoded, no via Better Auth reset token
+
+**Ubicacion:** `team.ts` line ~XX (donde se genera `randomBytes(...).toString('base64url').slice(0,14)`).
+
+**Impacto:** Better Auth tiene flujo standard de password reset. Estamos bypaseando para el caso de invitacion porque Better Auth no tiene invite-token nativo. Pero la generacion local:
+
+- No hashing como hace Better Auth internamente (la password se inserta directo en BD via signUpEmail, lo cual SI hashea).
+- Pero la password en si nace en nuestro codigo, no en Better Auth.
+
+**Resolucion:** Cuando Better Auth agregue invite tokens (o se implemente plugin), migrar a ese flujo. Mientras tanto el actual es funcional pero no ideal.
+
+**Estado:** abierta. Funciona pero con superficie de ataque mas grande de lo necesario.
+
+## DA-24 — Archive del ultimo owner permite lockout
+
+**Ubicacion:** `team.archive` mutation en `team.ts`. Hoy no valida que quede al menos 1 owner activo en el business.
+
+**Impacto:** Si Jeff archiva al unico owner remaining (vos), el business queda sin nadie con permisos full. Nadie puede invitar nuevos owners. Lockout total — solo recuperable via DB directa.
+
+**Resolucion:** Validacion en `team.archive`:
+
+1. Antes de set status="removed", contar owners activos restantes del business.
+2. Si el target es owner Y count - 1 == 0, throw CONFLICT "Cannot archive the last active owner".
+
+Tres lineas de codigo. Alta prioridad.
+
+**Estado:** abierta. Bug critico que se manifiesta solo en escenarios de error humano. Resolver en proximo cleanup auth (15 min).
+
+## DA-25 — Routers no auditados con `effectiveLocationIds`
+
+**Ubicacion:** `inventory.ts`, `orders.ts`, `dashboard.ts`, posiblemente otros.
+
+**Impacto:** El nuevo `ctx.effectiveLocationIds` (lista de locations que el granular user puede operar) se usa correctamente en `locations.list`. Pero rutas que reciben `locationId` como input y validan con `ctx.activeBusinessId` pueden NO chequear que ese `locationId` este en `effectiveLocationIds` del user.
+
+Resultado practico: un cashier de Britalia podria pasar manualmente `locationId=amparo_id` al `dashboard.stats` o `inventory.balancesByLocation` y obtener data de Amparo. La gate UI lo restringe pero la API no.
+
+**Resolucion:** audit pass por todos los routers que reciben `locationId`. Patron correcto:
+
+```ts
+if (ctx.isLocationScoped && !ctx.effectiveLocationIds.includes(input.locationId)) {
+  throw new TRPCError({ code: "FORBIDDEN" });
+}
+```
+
+Aplicar consistentemente. ~30 min de subagente.
+
+**Estado:** abierta. Riesgo medio: la UI no expone al cashier el otro locationId (selector filtrado), pero un atacante con credenciales validas podria enviar el request manual via curl. Resolver en proximo cleanup auth junto con DA-24.
 
 ## Convencion de cierre
 
