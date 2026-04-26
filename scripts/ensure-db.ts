@@ -1,10 +1,10 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 
 const DATA_DIR = "./data/pglite";
 
 async function main() {
-  if (!existsSync(DATA_DIR)) return;
+  mkdirSync(DATA_DIR, { recursive: true });
 
   try {
     const pg = new PGlite(DATA_DIR);
