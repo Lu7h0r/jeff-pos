@@ -111,6 +111,7 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | DA-23 | Generacion de password hardcoded, no via Better Auth reset | media | TBD | abierta |
 | DA-24 | Archive del ultimo owner posible (lockout risk) | alta | auth-cleanup | cerrada |
 | DA-25 | Routers de inventory/orders/dashboard no auditados con effectiveLocationIds | media | auth-cleanup | cerrada |
+| DA-26 | `orders.create` falla para items `kind="service"` (sin inventario) | alta | fix/orders-allow-service-items | cerrada |
 
 ## DA-6 — `inventory_balances` sin UNIQUE compound
 
@@ -416,7 +417,7 @@ Resultado practico: el POS deja agregar servicios al carrito y abre el dialogo d
 
 **Resolucion sugerida:** en `orders.create`, antes del UPDATE, leer `products.kind` por `product_id` y saltear el descuento de stock + el `inventory_movement` cuando `kind === "service"`. Mantener el resto del flujo (precio del DB, payments, cash movement). Tests nuevos: una orden con un solo item servicio y otra mixta (servicio + producto) que verifiquen que el inventario fisico baja y el del servicio queda intacto.
 
-**Estado:** abierta. Bloquea el uso real del POS con servicios; la UX ya esta lista pero la venta no cierra. Estimado 1-2h.
+**Estado:** cerrada. Branch `fix/orders-allow-service-items`: `orders.create` ahora resuelve `product.kind` desde el SELECT existente sobre `products` (la columna ya venia en el `select()`) y saltea tanto el UPDATE guardado sobre `inventory_balances` como el insert en `inventory_movements` cuando `kind === "service"`. El resto del flujo es identico: precio leido del DB, snapshot en `order_items` (`unit_cost = product.cost_amount` — 0/null en servicios sin costo), validacion `sum(paymentLines) === total`, `order_payments`, `cash_movements` y `cash_sessions.expected_*` sin cambios. `orders.void` espeja la simetria: para cada `order_item` busca el `kind` actual del product en una query previa al `tx`, saltea el restore de balance y la fila reverso de `inventory_movements` cuando es servicio, y loggea un warning + skip cuando el product ya no existe (edge case raro). Se agrego suite `orders.create / orders.void — service items (DA-26)` con 6 tests (single service, mixed, two services, payment mismatch, void mixto, void service-only). Tests totales: 231 → 237 (todos pass). El POS ahora cierra ventas de servicios end-to-end. Pendiente fuera de scope: voidear automaticamente los `service_sales` / `commission_estimates` linkeados (DA-16 ya cubre la atomicidad del attach, este fix se queda contenido a inventario).
 
 ## Convencion de cierre
 
