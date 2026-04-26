@@ -733,6 +733,343 @@ describe("orders.editNotes — replaces retired orders.update (DA-8)", () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DA-26 — service items must sell without an inventory_balances row.
+// Service products live on `products.kind === "service"`; they have no
+// physical stock and the ledger lives in `service_sales` (attached
+// post-confirm by the services router). orders.create must skip the stock
+// decrement and the inventory_movements insert; orders.void must mirror
+// that asymmetry on reversal.
+describe("orders.create / orders.void — service items (DA-26)", () => {
+  let serviceLocId: number;
+  let serviceSessionId: number;
+  let tattooServiceId: number;
+  let piercingServiceId: number;
+  let physicalForMixId: number;
+
+  beforeAll(async () => {
+    const [loc] = await db
+      .insert(schema.locations)
+      .values({ business_id: bizJeffId, name: "Servicios", slug: "servicios" })
+      .returning();
+    serviceLocId = loc.id;
+
+    const [session] = await db
+      .insert(schema.cashSessions)
+      .values({
+        business_id: bizJeffId,
+        location_id: serviceLocId,
+        opened_by_user_id: "u-jeff",
+        opening_cash_amount: 0,
+        expected_cash_amount: 0,
+        expected_digital_amount: 0,
+        status: "open",
+      })
+      .returning();
+    serviceSessionId = session.id;
+
+    const services = await db
+      .insert(schema.products)
+      .values([
+        {
+          name: "Tattoo Small",
+          price: 80_000,
+          in_stock: 0,
+          user_uid: "u-jeff",
+          business_id: bizJeffId,
+          sku: "SVC-TAT-S",
+          cost_amount: 0,
+          status: "active",
+          kind: "service",
+          default_service_kind: "tattoo",
+        },
+        {
+          name: "Piercing Standard",
+          price: 50_000,
+          in_stock: 0,
+          user_uid: "u-jeff",
+          business_id: bizJeffId,
+          sku: "SVC-PIER",
+          cost_amount: null,
+          status: "active",
+          kind: "service",
+          default_service_kind: "piercing",
+        },
+        {
+          name: "Mix Ink",
+          price: 1_000,
+          in_stock: 0,
+          user_uid: "u-jeff",
+          business_id: bizJeffId,
+          sku: "INK-MIX",
+          cost_amount: 300,
+          status: "active",
+          kind: "product",
+        },
+      ])
+      .returning();
+    tattooServiceId = services[0].id;
+    piercingServiceId = services[1].id;
+    physicalForMixId = services[2].id;
+
+    await db.insert(schema.inventoryBalances).values({
+      business_id: bizJeffId,
+      location_id: serviceLocId,
+      product_id: physicalForMixId,
+      quantity_on_hand: 10,
+      quantity_reserved: 0,
+    });
+  });
+
+  it("(S1) single service item sale: no inventory_movement, no balance row touched, payments + cash flow intact", async () => {
+    const sessionBefore = (
+      await db
+        .select()
+        .from(schema.cashSessions)
+        .where(eq(schema.cashSessions.id, serviceSessionId))
+    )[0];
+
+    const order = await jeffCaller().create({
+      locationId: serviceLocId,
+      items: [{ productId: tattooServiceId, quantity: 1 }],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 80_000 }],
+    });
+
+    expect(order.total_amount).toBe(80_000);
+    expect(order.payment_status).toBe("paid");
+    expect(order.process_status).toBe("complete");
+    expect(order.items.length).toBe(1);
+    expect(order.items[0].unit_price).toBe(80_000);
+    expect(order.items[0].unit_cost).toBe(0);
+    expect(order.items[0].total_price).toBe(80_000);
+
+    const balances = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(
+        and(
+          eq(schema.inventoryBalances.location_id, serviceLocId),
+          eq(schema.inventoryBalances.product_id, tattooServiceId),
+        ),
+      );
+    expect(balances.length).toBe(0);
+
+    const movements = await db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(
+        and(
+          eq(schema.inventoryMovements.source_type, "order"),
+          eq(schema.inventoryMovements.source_id, order.id),
+        ),
+      );
+    expect(movements.length).toBe(0);
+
+    const payments = await db
+      .select()
+      .from(schema.orderPayments)
+      .where(eq(schema.orderPayments.order_id, order.id));
+    expect(payments.length).toBe(1);
+    expect(payments[0].amount).toBe(80_000);
+
+    const cm = await db
+      .select()
+      .from(schema.cashMovements)
+      .where(eq(schema.cashMovements.source_id, order.id));
+    expect(cm.length).toBe(1);
+    expect(cm[0].amount).toBe(80_000);
+    expect(cm[0].transaction_type).toBe("positive");
+
+    const [sessionAfter] = await db
+      .select()
+      .from(schema.cashSessions)
+      .where(eq(schema.cashSessions.id, serviceSessionId));
+    expect(sessionAfter.expected_cash_amount).toBe(
+      sessionBefore.expected_cash_amount + 80_000,
+    );
+  });
+
+  it("(S2) mixed service + physical: physical decrements, service untouched, only one inventory_movement", async () => {
+    const [physBefore] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(
+        and(
+          eq(schema.inventoryBalances.location_id, serviceLocId),
+          eq(schema.inventoryBalances.product_id, physicalForMixId),
+        ),
+      );
+
+    const order = await jeffCaller().create({
+      locationId: serviceLocId,
+      items: [
+        { productId: tattooServiceId, quantity: 1 },
+        { productId: physicalForMixId, quantity: 3 },
+      ],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 80_000 + 3_000 }],
+    });
+
+    expect(order.items.length).toBe(2);
+    expect(order.total_amount).toBe(83_000);
+
+    const [physAfter] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(eq(schema.inventoryBalances.id, physBefore.id));
+    expect(physAfter.quantity_on_hand).toBe(physBefore.quantity_on_hand - 3);
+
+    const movements = await db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(
+        and(
+          eq(schema.inventoryMovements.source_type, "order"),
+          eq(schema.inventoryMovements.source_id, order.id),
+        ),
+      );
+    expect(movements.length).toBe(1);
+    expect(movements[0].product_id).toBe(physicalForMixId);
+    expect(movements[0].quantity_delta).toBe(-3);
+  });
+
+  it("(S3) two service items only: zero inventory_movements, two order_items", async () => {
+    const order = await jeffCaller().create({
+      locationId: serviceLocId,
+      items: [
+        { productId: tattooServiceId, quantity: 1 },
+        { productId: piercingServiceId, quantity: 2 },
+      ],
+      paymentLines: [
+        { paymentMethodId: pmCashId, amount: 80_000 + 100_000 },
+      ],
+    });
+
+    expect(order.total_amount).toBe(180_000);
+    expect(order.items.length).toBe(2);
+
+    const movements = await db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(
+        and(
+          eq(schema.inventoryMovements.source_type, "order"),
+          eq(schema.inventoryMovements.source_id, order.id),
+        ),
+      );
+    expect(movements.length).toBe(0);
+  });
+
+  it("(S4) service with payment lines that don't sum to total → BAD_REQUEST", async () => {
+    await expect(
+      jeffCaller().create({
+        locationId: serviceLocId,
+        items: [{ productId: tattooServiceId, quantity: 1 }],
+        paymentLines: [{ paymentMethodId: pmCashId, amount: 70_000 }],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" } satisfies Partial<TRPCError>);
+  });
+
+  it("(S5) voiding a mixed order: physical balance restored, service untouched, single reverse movement", async () => {
+    const [physBefore] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(
+        and(
+          eq(schema.inventoryBalances.location_id, serviceLocId),
+          eq(schema.inventoryBalances.product_id, physicalForMixId),
+        ),
+      );
+
+    const order = await jeffCaller().create({
+      locationId: serviceLocId,
+      items: [
+        { productId: piercingServiceId, quantity: 1 },
+        { productId: physicalForMixId, quantity: 2 },
+      ],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 50_000 + 2_000 }],
+    });
+
+    const [physDuring] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(eq(schema.inventoryBalances.id, physBefore.id));
+    expect(physDuring.quantity_on_hand).toBe(physBefore.quantity_on_hand - 2);
+
+    await jeffCaller().void({
+      orderId: order.id,
+      voidanceReason: "mixed void",
+    });
+
+    const [physAfter] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(eq(schema.inventoryBalances.id, physBefore.id));
+    expect(physAfter.quantity_on_hand).toBe(physBefore.quantity_on_hand);
+
+    const reversals = await db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(
+        and(
+          eq(schema.inventoryMovements.source_type, "order_void"),
+          eq(schema.inventoryMovements.source_id, order.id),
+        ),
+      );
+    expect(reversals.length).toBe(1);
+    expect(reversals[0].product_id).toBe(physicalForMixId);
+    expect(reversals[0].quantity_delta).toBe(2);
+
+    const serviceBalances = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(
+        and(
+          eq(schema.inventoryBalances.location_id, serviceLocId),
+          eq(schema.inventoryBalances.product_id, piercingServiceId),
+        ),
+      );
+    expect(serviceBalances.length).toBe(0);
+  });
+
+  it("(S6) voiding a service-only order: zero reverse inventory movements, cash refund still posted", async () => {
+    const order = await jeffCaller().create({
+      locationId: serviceLocId,
+      items: [{ productId: piercingServiceId, quantity: 1 }],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 50_000 }],
+    });
+
+    const voided = await jeffCaller().void({
+      orderId: order.id,
+      voidanceReason: "service-only void",
+    });
+    expect(voided.process_status).toBe("void");
+
+    const reversals = await db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(
+        and(
+          eq(schema.inventoryMovements.source_type, "order_void"),
+          eq(schema.inventoryMovements.source_id, order.id),
+        ),
+      );
+    expect(reversals.length).toBe(0);
+
+    const refundCash = await db
+      .select()
+      .from(schema.cashMovements)
+      .where(
+        and(
+          eq(schema.cashMovements.source_type, "order_void"),
+          eq(schema.cashMovements.source_id, order.id),
+        ),
+      );
+    expect(refundCash.length).toBe(1);
+    expect(refundCash[0].amount).toBe(-50_000);
+    expect(refundCash[0].transaction_type).toBe("negative");
+  });
+});
+
 describe("orders.list and orders.get", () => {
   it("orders.list scopes by business_id (does not leak across businesses)", async () => {
     // Seed an order for u-other at otherLocation
