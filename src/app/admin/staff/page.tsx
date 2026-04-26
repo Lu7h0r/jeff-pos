@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { UserIcon, PlusCircleIcon, ArchiveIcon, CheckIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { useTRPC } from "@/lib/trpc/client";
 import { useCrudMutation } from "@/hooks/use-crud-mutation";
+import { formatCurrency } from "@/lib/utils";
 
 type Kind = "artist" | "apprentice" | "piercer" | "manager" | "external";
 type Split =
@@ -74,6 +76,8 @@ const SPLIT_OPTIONS: Split[] = [
 ];
 
 export default function StaffPage() {
+  const t = useTranslations("staff");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const listQuery = useQuery(trpc.staff.list.queryOptions());
   const listKey = trpc.staff.list.queryOptions().queryKey;
@@ -87,11 +91,14 @@ export default function StaffPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
 
+  const tKind = (k: Kind) => t(`kinds.${k}`);
+  const tSplit = (s: Split) => t(`splits.${s}`);
+
   const createMutation = useCrudMutation({
     mutationOptions: trpc.staff.create.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Staff member created",
-    errorMessage: "Failed to create staff",
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
     onSuccess: () => {
       setForm(EMPTY);
       setDialogOpen(false);
@@ -100,14 +107,14 @@ export default function StaffPage() {
   const archiveMutation = useCrudMutation({
     mutationOptions: trpc.staff.archive.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Staff archived",
-    errorMessage: "Failed to archive staff",
+    successMessage: t("archived"),
+    errorMessage: t("archiveFailed"),
   });
   const liquidateMutation = useCrudMutation({
     mutationOptions: trpc.services.commissions.markLiquidated.mutationOptions(),
     invalidateKeys: commissionsKey,
-    successMessage: "Commission liquidated",
-    errorMessage: "Failed to liquidate commission",
+    successMessage: t("liquidated"),
+    errorMessage: t("liquidateFailed"),
   });
 
   const submit = () => {
@@ -145,33 +152,33 @@ export default function StaffPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <UserIcon className="w-5 h-5" />
-            <CardTitle>Staff</CardTitle>
+            <CardTitle>{t("title")}</CardTitle>
           </div>
           <Button size="sm" onClick={() => setDialogOpen(true)}>
-            <PlusCircleIcon className="w-4 h-4 mr-2" /> New staff
+            <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("newStaff")}
           </Button>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>Commission %</TableHead>
-                <TableHead>Default split</TableHead>
-                <TableHead>Pending</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("colName")}</TableHead>
+                <TableHead>{t("colKind")}</TableHead>
+                <TableHead>{t("colCommission")}</TableHead>
+                <TableHead>{t("colSplit")}</TableHead>
+                <TableHead>{t("colPending")}</TableHead>
+                <TableHead className="text-right">{t("colActions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {staff.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.display_name}</TableCell>
-                  <TableCell>{s.kind}</TableCell>
+                  <TableCell>{tKind(s.kind as Kind)}</TableCell>
                   <TableCell>{(s.commission_rate / 100).toFixed(2)}%</TableCell>
-                  <TableCell>{s.default_split}</TableCell>
+                  <TableCell>{tSplit(s.default_split as Split)}</TableCell>
                   <TableCell>
-                    ${((totals.get(s.id) ?? 0) / 100).toFixed(2)}
+                    {formatCurrency(totals.get(s.id) ?? 0)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -180,7 +187,7 @@ export default function StaffPage() {
                       onClick={() => archiveMutation.mutate({ id: s.id })}
                       disabled={archiveMutation.isPending}
                     >
-                      <ArchiveIcon className="w-4 h-4 mr-2" /> Archive
+                      <ArchiveIcon className="w-4 h-4 mr-2" /> {tc("archive")}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -191,7 +198,7 @@ export default function StaffPage() {
                     colSpan={6}
                     className="text-center text-muted-foreground"
                   >
-                    No staff yet.
+                    {t("empty")}
                   </TableCell>
                 </TableRow>
               )}
@@ -202,33 +209,29 @@ export default function StaffPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Comisiones por liquidar</CardTitle>
+          <CardTitle>{t("commissionsTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Staff</TableHead>
-                <TableHead>Gross</TableHead>
-                <TableHead>Staff share</TableHead>
-                <TableHead>House share</TableHead>
-                <TableHead>Split</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("colStaff")}</TableHead>
+                <TableHead>{t("colGross")}</TableHead>
+                <TableHead>{t("colStaffShare")}</TableHead>
+                <TableHead>{t("colHouseShare")}</TableHead>
+                <TableHead>{t("colSplitKind")}</TableHead>
+                <TableHead>{t("colCommissionStatus")}</TableHead>
+                <TableHead className="text-right">{t("colActions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {commissions.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell>{c.staff_display_name}</TableCell>
-                  <TableCell>${(c.gross_amount / 100).toFixed(2)}</TableCell>
-                  <TableCell>
-                    ${(c.staff_share_amount / 100).toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    ${(c.house_share_amount / 100).toFixed(2)}
-                  </TableCell>
-                  <TableCell>{c.split_kind}</TableCell>
+                  <TableCell>{formatCurrency(c.gross_amount)}</TableCell>
+                  <TableCell>{formatCurrency(c.staff_share_amount)}</TableCell>
+                  <TableCell>{formatCurrency(c.house_share_amount)}</TableCell>
+                  <TableCell>{tSplit(c.split_kind as Split)}</TableCell>
                   <TableCell>{c.status}</TableCell>
                   <TableCell className="text-right">
                     {c.status !== "liquidated" ? (
@@ -242,7 +245,7 @@ export default function StaffPage() {
                         }
                         disabled={liquidateMutation.isPending}
                       >
-                        <CheckIcon className="w-4 h-4 mr-2" /> Marcar liquidada
+                        <CheckIcon className="w-4 h-4 mr-2" /> {t("markLiquidated")}
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
@@ -256,7 +259,7 @@ export default function StaffPage() {
                     colSpan={7}
                     className="text-center text-muted-foreground"
                   >
-                    No commissions yet.
+                    {t("noCommissions")}
                   </TableCell>
                 </TableRow>
               )}
@@ -268,11 +271,11 @@ export default function StaffPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New staff member</DialogTitle>
+            <DialogTitle>{t("newStaffTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
-              <Label>Display name</Label>
+              <Label>{t("displayNameLabel")}</Label>
               <Input
                 value={form.displayName}
                 onChange={(e) =>
@@ -282,7 +285,7 @@ export default function StaffPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>Kind</Label>
+                <Label>{t("kindLabel")}</Label>
                 <Select
                   value={form.kind}
                   onValueChange={(v) =>
@@ -295,14 +298,14 @@ export default function StaffPage() {
                   <SelectContent>
                     {KIND_OPTIONS.map((k) => (
                       <SelectItem key={k} value={k}>
-                        {k}
+                        {tKind(k)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Commission rate (%)</Label>
+                <Label>{t("commissionRateLabel")}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -318,7 +321,7 @@ export default function StaffPage() {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Default split</Label>
+              <Label>{t("defaultSplitLabel")}</Label>
               <Select
                 value={form.defaultSplit}
                 onValueChange={(v) =>
@@ -331,24 +334,24 @@ export default function StaffPage() {
                 <SelectContent>
                   {SPLIT_OPTIONS.map((sp) => (
                     <SelectItem key={sp} value={sp}>
-                      {sp}
+                      {tSplit(sp)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>User ID (optional, link to existing app user)</Label>
+              <Label>{t("userIdLabel")}</Label>
               <Input
                 value={form.userId}
                 onChange={(e) =>
                   setForm((s) => ({ ...s, userId: e.target.value }))
                 }
-                placeholder="leave empty for external artists"
+                placeholder={t("userIdPlaceholder")}
               />
             </div>
             <div className="grid gap-2">
-              <Label>Notes</Label>
+              <Label>{t("notesLabel")}</Label>
               <Input
                 value={form.notes}
                 onChange={(e) =>
@@ -359,10 +362,10 @@ export default function StaffPage() {
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={submit} disabled={createMutation.isPending}>
-              Create
+              {tc("create")}
             </Button>
           </DialogFooter>
         </DialogContent>

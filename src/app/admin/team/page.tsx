@@ -8,6 +8,7 @@ import {
   ArchiveIcon,
   CopyIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   Card,
   CardContent,
@@ -72,10 +73,14 @@ const ROLE_OPTIONS: Role[] = [
 ];
 
 export default function TeamPage() {
+  const t = useTranslations("team");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const businessQuery = useQuery(trpc.businesses.getCurrent.queryOptions());
   const role = businessQuery.data?.role ?? null;
   const isAuthorized = role === "owner" || role === "manager";
+
+  const tRole = (r: Role) => t(`roles.${r}`);
 
   const listOptions = trpc.team.list.queryOptions(undefined, {
     enabled: isAuthorized,
@@ -93,8 +98,8 @@ export default function TeamPage() {
   const inviteMutation = useCrudMutation({
     mutationOptions: trpc.team.invite.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Member invited",
-    errorMessage: "Failed to invite member",
+    successMessage: t("invited"),
+    errorMessage: t("inviteFailed"),
     onSuccess: (data) => {
       setForm(EMPTY_FORM);
       setDialogOpen(false);
@@ -107,28 +112,25 @@ export default function TeamPage() {
   const updateRoleMutation = useCrudMutation({
     mutationOptions: trpc.team.updateRole.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Role updated",
-    errorMessage: "Failed to update role",
+    successMessage: t("roleUpdated"),
+    errorMessage: t("roleUpdateFailed"),
   });
 
   const archiveMutation = useCrudMutation({
     mutationOptions: trpc.team.archive.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Member removed",
-    errorMessage: "Failed to remove member",
+    successMessage: t("removed"),
+    errorMessage: t("removeFailed"),
   });
 
   if (!businessQuery.isLoading && !isAuthorized) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Team</CardTitle>
+          <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            You don&apos;t have permission to manage the team. Contact an owner
-            or manager.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("noPermission")}</p>
         </CardContent>
       </Card>
     );
@@ -137,7 +139,7 @@ export default function TeamPage() {
   const submit = () => {
     if (!form.email.trim() || !form.displayName.trim()) return;
     if (form.scopeKind === "location" && !form.locationId) {
-      toast.error("Select a location for the granular scope");
+      toast.error(t("selectScopeLocation"));
       return;
     }
     inviteMutation.mutate({
@@ -160,22 +162,22 @@ export default function TeamPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <UsersRoundIcon className="w-5 h-5" />
-            <CardTitle>Team</CardTitle>
+            <CardTitle>{t("title")}</CardTitle>
           </div>
           <Button size="sm" onClick={() => setDialogOpen(true)}>
-            <PlusCircleIcon className="w-4 h-4 mr-2" /> Invite member
+            <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("inviteMember")}
           </Button>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("colEmail")}</TableHead>
+                <TableHead>{t("colName")}</TableHead>
+                <TableHead>{t("colRole")}</TableHead>
+                <TableHead>{t("colScope")}</TableHead>
+                <TableHead>{t("colStatus")}</TableHead>
+                <TableHead className="text-right">{t("colActions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -200,7 +202,7 @@ export default function TeamPage() {
                       <SelectContent>
                         {ROLE_OPTIONS.map((r) => (
                           <SelectItem key={r} value={r}>
-                            {r}
+                            {tRole(r)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -208,10 +210,11 @@ export default function TeamPage() {
                   </TableCell>
                   <TableCell>
                     {m.type === "business" ? (
-                      <Badge variant="default">Business-wide</Badge>
+                      <Badge variant="default">{t("businessWide")}</Badge>
                     ) : (
                       <Badge variant="secondary">
-                        {m.locationName ?? `Location ${m.locationId}`}
+                        {m.locationName ??
+                          t("locationFallback", { id: m.locationId ?? "" })}
                       </Badge>
                     )}
                   </TableCell>
@@ -228,7 +231,7 @@ export default function TeamPage() {
                       }
                       disabled={archiveMutation.isPending}
                     >
-                      <ArchiveIcon className="w-4 h-4 mr-2" /> Remove
+                      <ArchiveIcon className="w-4 h-4 mr-2" /> {t("remove")}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -239,7 +242,7 @@ export default function TeamPage() {
                     colSpan={6}
                     className="text-center text-muted-foreground"
                   >
-                    No members yet.
+                    {t("empty")}
                   </TableCell>
                 </TableRow>
               )}
@@ -251,11 +254,11 @@ export default function TeamPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite team member</DialogTitle>
+            <DialogTitle>{t("inviteMemberTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
-              <Label>Email</Label>
+              <Label>{tc("email")}</Label>
               <Input
                 type="email"
                 value={form.email}
@@ -265,7 +268,7 @@ export default function TeamPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Display name</Label>
+              <Label>{t("displayNameLabel")}</Label>
               <Input
                 value={form.displayName}
                 onChange={(e) =>
@@ -274,7 +277,7 @@ export default function TeamPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Role</Label>
+              <Label>{t("colRole")}</Label>
               <Select
                 value={form.role}
                 onValueChange={(v) =>
@@ -287,14 +290,14 @@ export default function TeamPage() {
                 <SelectContent>
                   {ROLE_OPTIONS.map((r) => (
                     <SelectItem key={r} value={r}>
-                      {r}
+                      {tRole(r)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Scope</Label>
+              <Label>{t("scopeLabel")}</Label>
               <Select
                 value={form.scopeKind}
                 onValueChange={(v) =>
@@ -305,18 +308,14 @@ export default function TeamPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="business">
-                    Business-wide (all locations)
-                  </SelectItem>
-                  <SelectItem value="location">
-                    Specific location only
-                  </SelectItem>
+                  <SelectItem value="business">{t("scopeBusiness")}</SelectItem>
+                  <SelectItem value="location">{t("scopeLocation")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {form.scopeKind === "location" && (
               <div className="grid gap-2">
-                <Label>Location</Label>
+                <Label>{t("scopeLocationLabel")}</Label>
                 <Select
                   value={form.locationId}
                   onValueChange={(v) =>
@@ -324,7 +323,7 @@ export default function TeamPage() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a location" />
+                    <SelectValue placeholder={t("selectLocation")} />
                   </SelectTrigger>
                   <SelectContent>
                     {locations.map((loc) => (
@@ -339,10 +338,10 @@ export default function TeamPage() {
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={submit} disabled={inviteMutation.isPending}>
-              Invite
+              {t("invite")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -356,12 +355,9 @@ export default function TeamPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>One-time password</DialogTitle>
+            <DialogTitle>{t("otpTitle")}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Share this password with the new member. It will not be shown
-            again. The member should change it on first login.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("otpHint")}</p>
           <div className="flex items-center gap-2">
             <Input readOnly value={generatedPassword ?? ""} />
             <Button
@@ -370,7 +366,7 @@ export default function TeamPage() {
               onClick={() => {
                 if (generatedPassword) {
                   navigator.clipboard.writeText(generatedPassword);
-                  toast.success("Password copied");
+                  toast.success(t("passwordCopied"));
                 }
               }}
             >
@@ -378,7 +374,9 @@ export default function TeamPage() {
             </Button>
           </div>
           <DialogFooter>
-            <Button onClick={() => setGeneratedPassword(null)}>Done</Button>
+            <Button onClick={() => setGeneratedPassword(null)}>
+              {tc("done")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

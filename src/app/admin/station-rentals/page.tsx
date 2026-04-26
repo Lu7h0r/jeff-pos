@@ -8,6 +8,7 @@ import {
   CheckCircle2Icon,
   XCircleIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { useTRPC } from "@/lib/trpc/client";
 import { useCrudMutation } from "@/hooks/use-crud-mutation";
+import { formatCurrency } from "@/lib/utils";
 
 type FormState = {
   workstationId: string;
@@ -70,6 +72,8 @@ function dateKey(d: Date): string {
 }
 
 export default function StationRentalsPage() {
+  const t = useTranslations("stationRentals");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
   useEffect(() => setActiveLocationId(readLocationCookie()), []);
@@ -98,11 +102,18 @@ export default function StationRentalsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
 
+  const statusLabel = (s: string) =>
+    s === "completed"
+      ? t("statusCompleted")
+      : s === "cancelled"
+        ? t("statusCancelled")
+        : t("statusScheduled");
+
   const createMutation = useCrudMutation({
     mutationOptions: trpc.stationRentals.create.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Rental created",
-    errorMessage: "Failed to create rental",
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
     onSuccess: () => {
       setForm(EMPTY);
       setDialogOpen(false);
@@ -111,14 +122,14 @@ export default function StationRentalsPage() {
   const completeMutation = useCrudMutation({
     mutationOptions: trpc.stationRentals.markCompleted.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Rental completed",
-    errorMessage: "Failed to mark completed",
+    successMessage: t("completed"),
+    errorMessage: t("completeFailed"),
   });
   const cancelMutation = useCrudMutation({
     mutationOptions: trpc.stationRentals.cancel.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Rental cancelled",
-    errorMessage: "Failed to cancel rental",
+    successMessage: t("cancelled"),
+    errorMessage: t("cancelFailed"),
   });
 
   const submit = () => {
@@ -166,11 +177,11 @@ export default function StationRentalsPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>No active location</CardTitle>
+          <CardTitle>{t("noActiveLocationTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Pick a location in the top bar to manage station rentals.
+            {t("noActiveLocationHint")}
           </p>
         </CardContent>
       </Card>
@@ -182,16 +193,16 @@ export default function StationRentalsPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <ClockIcon className="w-5 h-5" />
-          <CardTitle>Station rentals</CardTitle>
+          <CardTitle>{t("title")}</CardTitle>
         </div>
         <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <PlusCircleIcon className="w-4 h-4 mr-2" /> New rental
+          <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("newRental")}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {grouped.length === 0 && (
           <p className="text-center text-muted-foreground text-sm">
-            No rentals yet.
+            {t("empty")}
           </p>
         )}
         {grouped.map(([day, dayRentals]) => (
@@ -200,13 +211,13 @@ export default function StationRentalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Workstation</TableHead>
-                  <TableHead>Staff</TableHead>
-                  <TableHead>Start</TableHead>
-                  <TableHead>End</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("colWorkstation")}</TableHead>
+                  <TableHead>{t("colStaff")}</TableHead>
+                  <TableHead>{t("colStart")}</TableHead>
+                  <TableHead>{t("colEnd")}</TableHead>
+                  <TableHead>{t("colAmount")}</TableHead>
+                  <TableHead>{t("colStatus")}</TableHead>
+                  <TableHead className="text-right">{t("colActions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -222,11 +233,13 @@ export default function StationRentalsPage() {
                         {st?.display_name ?? `#${r.staff_member_id}`}
                       </TableCell>
                       <TableCell>
-                        {r.start_at.toLocaleTimeString()}
+                        {r.start_at.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
                       </TableCell>
-                      <TableCell>{r.end_at.toLocaleTimeString()}</TableCell>
-                      <TableCell>${(r.amount / 100).toFixed(2)}</TableCell>
-                      <TableCell>{r.status}</TableCell>
+                      <TableCell>
+                        {r.end_at.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+                      </TableCell>
+                      <TableCell>{formatCurrency(r.amount)}</TableCell>
+                      <TableCell>{statusLabel(r.status)}</TableCell>
                       <TableCell className="text-right space-x-1">
                         {r.status === "scheduled" ? (
                           <>
@@ -263,11 +276,11 @@ export default function StationRentalsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New station rental</DialogTitle>
+            <DialogTitle>{t("newRentalTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
-              <Label>Workstation</Label>
+              <Label>{t("workstationLabel")}</Label>
               <Select
                 value={form.workstationId}
                 onValueChange={(v) =>
@@ -275,7 +288,7 @@ export default function StationRentalsPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a workstation" />
+                  <SelectValue placeholder={t("pickWorkstation")} />
                 </SelectTrigger>
                 <SelectContent>
                   {workstations.map((w) => (
@@ -287,7 +300,7 @@ export default function StationRentalsPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Staff</Label>
+              <Label>{t("staffLabel")}</Label>
               <Select
                 value={form.staffMemberId}
                 onValueChange={(v) =>
@@ -295,7 +308,7 @@ export default function StationRentalsPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a staff member" />
+                  <SelectValue placeholder={t("pickStaff")} />
                 </SelectTrigger>
                 <SelectContent>
                   {staff.map((s) => (
@@ -308,7 +321,7 @@ export default function StationRentalsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>Start</Label>
+                <Label>{t("startLabel")}</Label>
                 <Input
                   type="datetime-local"
                   value={form.startAt}
@@ -318,7 +331,7 @@ export default function StationRentalsPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>End</Label>
+                <Label>{t("endLabel")}</Label>
                 <Input
                   type="datetime-local"
                   value={form.endAt}
@@ -329,7 +342,7 @@ export default function StationRentalsPage() {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Amount (in currency units)</Label>
+              <Label>{t("amountLabel")}</Label>
               <Input
                 type="number"
                 min={0}
@@ -341,7 +354,7 @@ export default function StationRentalsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
-                <Label>Payment method (optional)</Label>
+                <Label>{t("paymentMethodOptional")}</Label>
                 <Select
                   value={form.paymentMethodId}
                   onValueChange={(v) =>
@@ -361,7 +374,7 @@ export default function StationRentalsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Cash session id (optional)</Label>
+                <Label>{t("cashSessionId")}</Label>
                 <Input
                   value={form.cashSessionId}
                   onChange={(e) =>
@@ -371,7 +384,7 @@ export default function StationRentalsPage() {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Notes</Label>
+              <Label>{t("notesLabel")}</Label>
               <Input
                 value={form.notes}
                 onChange={(e) =>
@@ -382,10 +395,10 @@ export default function StationRentalsPage() {
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={submit} disabled={createMutation.isPending}>
-              Create
+              {tc("create")}
             </Button>
           </DialogFooter>
         </DialogContent>
