@@ -1,108 +1,296 @@
 import { z } from "zod/v4";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
 import { db } from "@/lib/db";
-import { transactions } from "@/lib/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import {
+  businesses,
+  locations,
+  cashSessions,
+  orders,
+  orderPayments,
+  paymentMethods,
+  inventoryBalances,
+  products,
+} from "@/lib/db/schema";
+import { eq, and, gte, lte, desc, asc, lt, sql } from "drizzle-orm";
+
+// Threshold for "low stock" alerts. Hardcoded for MVP — when expenses/config
+// lands (Batch 6+) this should become a per-business setting.
+const LOW_STOCK_THRESHOLD = 5;
+const LOW_STOCK_LIST_LIMIT = 10;
+
+const cashSessionStatusSchema = z.enum(["open", "closed", "none"]);
+
+const dashboardStatsOutput = z.object({
+  business: z.object({
+    id: z.number(),
+    name: z.string(),
+    slug: z.string(),
+  }),
+  scope: z.object({
+    locationId: z.number().nullable(),
+    rangeFrom: z.date(),
+    rangeTo: z.date(),
+  }),
+  cashSession: z.object({
+    status: cashSessionStatusSchema,
+    openedAt: z.date().nullable(),
+    expectedCash: z.number(),
+    expectedDigital: z.number(),
+    countedCash: z.number().nullable(),
+    difference: z.number().nullable(),
+  }),
+  sales: z.object({
+    todayCount: z.number(),
+    todayRevenue: z.number(),
+    voidedCount: z.number(),
+    voidedRevenue: z.number(),
+    byPaymentMethod: z.array(
+      z.object({
+        paymentMethodId: z.number(),
+        name: z.string(),
+        total: z.number(),
+      }),
+    ),
+  }),
+  inventory: z.object({
+    lowStockCount: z.number(),
+    lowStock: z.array(
+      z.object({
+        productId: z.number(),
+        productName: z.string(),
+        locationId: z.number(),
+        locationName: z.string(),
+        quantityOnHand: z.number(),
+      }),
+    ),
+  }),
+  expensesPlaceholder: z.object({
+    note: z.string(),
+    monthTotal: z.number(),
+  }),
+});
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 export const dashboardRouter = router({
   stats: protectedProcedure
-    .meta({ openapi: { method: "GET", path: "/dashboard/stats", tags: ["Dashboard"], summary: "Get all dashboard statistics" } })
-    .input(z.void())
-    .output(
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/dashboard/stats",
+        tags: ["Dashboard"],
+        summary: "Per-location operational dashboard scoped to active business",
+      },
+    })
+    .input(
       z.object({
-        totalRevenue: z.number(),
-        totalExpenses: z.number(),
-        totalProfit: z.number(),
-        revenueByCategory: z.record(z.string(), z.number()),
-        expensesByCategory: z.record(z.string(), z.number()),
-        cashFlow: z.array(z.object({ date: z.string(), amount: z.number() })),
-        profitMargin: z.array(z.object({ date: z.string(), margin: z.number() })),
-      })
+        locationId: z.number().int().positive().optional(),
+        rangeFrom: z.date().optional(),
+        rangeTo: z.date().optional(),
+      }),
     )
-    .query(async ({ ctx }) => {
-      const uid = ctx.user.id;
+    .output(dashboardStatsOutput)
+    .query(async ({ ctx, input }) => {
+      if (ctx.activeBusinessId == null) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "No active business for this request",
+        });
+      }
+      const businessId = ctx.activeBusinessId;
 
-      const allCompleted = await db
+      const [biz] = await db
+        .select()
+        .from(businesses)
+        .where(eq(businesses.id, businessId))
+        .limit(1);
+
+      if (!biz) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Active business not found",
+        });
+      }
+
+      let scopedLocationId: number | null = null;
+      if (input.locationId !== undefined) {
+        const [loc] = await db
+          .select()
+          .from(locations)
+          .where(eq(locations.id, input.locationId))
+          .limit(1);
+        if (!loc || loc.business_id !== businessId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Location does not belong to active business",
+          });
+        }
+        scopedLocationId = loc.id;
+      }
+
+      const rangeFrom = input.rangeFrom ?? startOfToday();
+      const rangeTo = input.rangeTo ?? new Date();
+
+      // Cash session info. Only meaningful when locationId is provided —
+      // a cross-location summary cannot collapse multiple drawers into one
+      // status, so we return a documented "none" stub when locationId is
+      // omitted (caller-side guidance: pick a location to see drawer state).
+      let cashSessionStatus: "open" | "closed" | "none" = "none";
+      let openedAt: Date | null = null;
+      let expectedCash = 0;
+      let expectedDigital = 0;
+      let countedCash: number | null = null;
+      let difference: number | null = null;
+
+      if (scopedLocationId != null) {
+        const [openSession] = await db
+          .select()
+          .from(cashSessions)
+          .where(
+            and(
+              eq(cashSessions.business_id, businessId),
+              eq(cashSessions.location_id, scopedLocationId),
+              eq(cashSessions.status, "open"),
+            ),
+          )
+          .orderBy(desc(cashSessions.id))
+          .limit(1);
+
+        const session =
+          openSession ??
+          (
+            await db
+              .select()
+              .from(cashSessions)
+              .where(
+                and(
+                  eq(cashSessions.business_id, businessId),
+                  eq(cashSessions.location_id, scopedLocationId),
+                ),
+              )
+              .orderBy(desc(cashSessions.id))
+              .limit(1)
+          )[0];
+
+        if (session) {
+          cashSessionStatus = session.status === "open" ? "open" : "closed";
+          openedAt = session.opened_at;
+          expectedCash = session.expected_cash_amount;
+          expectedDigital = session.expected_digital_amount;
+          countedCash = session.counted_cash_amount;
+          difference = session.difference_amount;
+        }
+      }
+
+      const orderScope = [
+        eq(orders.business_id, businessId),
+        gte(orders.created_at, rangeFrom),
+        lte(orders.created_at, rangeTo),
+      ];
+      if (scopedLocationId != null) {
+        orderScope.push(eq(orders.location_id, scopedLocationId));
+      }
+
+      const completeAgg = await db
         .select({
-          amount: transactions.amount,
-          type: transactions.type,
-          category: transactions.category,
-          created_at: transactions.created_at,
+          count: sql<number>`count(*)::int`,
+          revenue: sql<number>`coalesce(sum(${orders.total_amount}), 0)::int`,
         })
-        .from(transactions)
-        .where(and(eq(transactions.status, "completed"), eq(transactions.user_uid, uid)))
-        .orderBy(asc(transactions.created_at));
+        .from(orders)
+        .where(and(...orderScope, eq(orders.process_status, "complete")));
 
-      const totalRevenue = allCompleted
-        .filter((t) => t.type === "income")
-        .reduce((s, t) => s + t.amount, 0);
+      const voidedAgg = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+          revenue: sql<number>`coalesce(sum(${orders.total_amount}), 0)::int`,
+        })
+        .from(orders)
+        .where(and(...orderScope, eq(orders.process_status, "void")));
 
-      const totalExpenses = allCompleted
-        .filter((t) => t.type === "expense")
-        .reduce((s, t) => s + t.amount, 0);
+      // By payment method: join order_payments → orders → payment_methods,
+      // restricted to complete orders within range. Voided payments are
+      // excluded so the breakdown reflects what actually counts as revenue.
+      const byPaymentRaw = await db
+        .select({
+          paymentMethodId: orderPayments.payment_method_id,
+          name: paymentMethods.name,
+          total: sql<number>`coalesce(sum(${orderPayments.amount}), 0)::int`,
+        })
+        .from(orderPayments)
+        .innerJoin(orders, eq(orders.id, orderPayments.order_id))
+        .innerJoin(
+          paymentMethods,
+          eq(paymentMethods.id, orderPayments.payment_method_id),
+        )
+        .where(and(...orderScope, eq(orders.process_status, "complete")))
+        .groupBy(orderPayments.payment_method_id, paymentMethods.name)
+        .orderBy(paymentMethods.name);
 
-      const totalSelling = allCompleted
-        .filter((t) => t.category === "selling")
-        .reduce((s, t) => s + t.amount, 0);
+      const lowStockBaseScope = [
+        eq(inventoryBalances.business_id, businessId),
+        lt(inventoryBalances.quantity_on_hand, LOW_STOCK_THRESHOLD),
+      ];
+      if (scopedLocationId != null) {
+        lowStockBaseScope.push(
+          eq(inventoryBalances.location_id, scopedLocationId),
+        );
+      }
 
-      const totalProfit = totalSelling - totalExpenses;
+      const lowStockCountRow = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(inventoryBalances)
+        .where(and(...lowStockBaseScope));
 
-      const revenueByCategory = allCompleted
-        .filter((t) => t.type === "income")
-        .reduce<Record<string, number>>((acc, t) => {
-          if (!t.category) return acc;
-          acc[t.category] = (acc[t.category] || 0) + t.amount;
-          return acc;
-        }, {});
-
-      const expensesByCategory = allCompleted
-        .filter((t) => t.type === "expense")
-        .reduce<Record<string, number>>((acc, t) => {
-          if (!t.category) return acc;
-          acc[t.category] = (acc[t.category] || 0) + t.amount;
-          return acc;
-        }, {});
-
-      const cashFlow = allCompleted.reduce<Record<string, number>>((acc, t) => {
-        const date = t.created_at
-          ? new Date(t.created_at).toISOString().split("T")[0]
-          : "unknown";
-        acc[date] = (acc[date] || 0) + t.amount;
-        return acc;
-      }, {});
-
-      const profitMargin = calculateProfitMarginSeries(allCompleted);
+      const lowStockRows = await db
+        .select({
+          productId: inventoryBalances.product_id,
+          productName: products.name,
+          locationId: inventoryBalances.location_id,
+          locationName: locations.name,
+          quantityOnHand: inventoryBalances.quantity_on_hand,
+        })
+        .from(inventoryBalances)
+        .innerJoin(products, eq(products.id, inventoryBalances.product_id))
+        .innerJoin(locations, eq(locations.id, inventoryBalances.location_id))
+        .where(and(...lowStockBaseScope))
+        .orderBy(asc(inventoryBalances.quantity_on_hand))
+        .limit(LOW_STOCK_LIST_LIMIT);
 
       return {
-        totalRevenue,
-        totalExpenses,
-        totalProfit,
-        revenueByCategory,
-        expensesByCategory,
-        cashFlow: Object.entries(cashFlow).map(([date, amount]) => ({ date, amount })),
-        profitMargin,
+        business: { id: biz.id, name: biz.name, slug: biz.slug },
+        scope: {
+          locationId: scopedLocationId,
+          rangeFrom,
+          rangeTo,
+        },
+        cashSession: {
+          status: cashSessionStatus,
+          openedAt,
+          expectedCash,
+          expectedDigital,
+          countedCash,
+          difference,
+        },
+        sales: {
+          todayCount: completeAgg[0]?.count ?? 0,
+          todayRevenue: completeAgg[0]?.revenue ?? 0,
+          voidedCount: voidedAgg[0]?.count ?? 0,
+          voidedRevenue: voidedAgg[0]?.revenue ?? 0,
+          byPaymentMethod: byPaymentRaw,
+        },
+        inventory: {
+          lowStockCount: lowStockCountRow[0]?.count ?? 0,
+          lowStock: lowStockRows,
+        },
+        expensesPlaceholder: {
+          note: "Wired in Batch 6",
+          monthTotal: 0,
+        },
       };
     }),
 });
-
-function calculateProfitMarginSeries(
-  txns: { amount: number; type: string | null; category: string | null; created_at: Date | null }[]
-) {
-  const dailyData: Record<string, { selling: number; expense: number }> = {};
-
-  for (const t of txns) {
-    const date = t.created_at
-      ? new Date(t.created_at).toISOString().split("T")[0]
-      : "unknown";
-    dailyData[date] ??= { selling: 0, expense: 0 };
-
-    if (t.category === "selling") dailyData[date].selling += t.amount;
-    else if (t.type === "expense") dailyData[date].expense += t.amount;
-  }
-
-  return Object.entries(dailyData).map(([date, { selling, expense }]) => {
-    const profit = selling - expense;
-    const margin = selling > 0 ? (profit / selling) * 100 : 0;
-    return { date, margin: parseFloat(margin.toFixed(2)) };
-  });
-}
