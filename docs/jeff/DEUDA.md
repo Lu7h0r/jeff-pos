@@ -406,6 +406,18 @@ Aplicar consistentemente. ~30 min de subagente.
 
 **Estado:** cerrada. Branch `chore/auth-cleanup-da24-da25`: nuevo helper `src/lib/trpc/scope-guards.ts:assertLocationAllowed(ctx, locationId)` rechaza FORBIDDEN cuando `ctx.isLocationScoped && !ctx.effectiveLocationIds.includes(locationId)`. Aplicado en los 10 routers que reciben `locationId` (input directo o derivado de fila): `inventory` (balancesByLocation/adjust/transfer/movements), `orders` (create/get/void/editNotes + filtro de scope en `list`), `dashboard.stats` (input.locationId + scope implicito en aggregates cuando granular), `cash-sessions` (open/current/close), `expenses.entries` (create/list, scope implicito), `purchases` (create/list/receive/cancel), `services` (attachToOrderItem via order.location_id, list + scope implicito), `station-rentals` (create via workstation.location_id, list/markCompleted/cancel), `workstations` (list + scope implicito, create/update/archive via row.location_id), `locations.getActive` ya cubria via scopedLocationIds. Tests en `scope-guards.test.ts` (10 cases).
 
+## DA-26 — `orders.create` falla para items `kind="service"` (sin inventario)
+
+**Ubicacion:** `src/lib/trpc/routers/orders.ts:311-336`.
+
+**Impacto:** El UPDATE atomico sobre `inventory_balances` exige que exista una fila por `(location_id, product_id)`. Los productos con `kind="service"` (introducidos en este batch) no tienen balance — el UPDATE devuelve 0 filas y la transaccion lanza CONFLICT "Insufficient stock", aunque el servicio sea intangible.
+
+Resultado practico: el POS deja agregar servicios al carrito y abre el dialogo de "Asignar artista", pero la confirmacion final del pedido falla. La UX del Capa 8 esta disponible visualmente pero la venta de servicios no se puede cerrar.
+
+**Resolucion sugerida:** en `orders.create`, antes del UPDATE, leer `products.kind` por `product_id` y saltear el descuento de stock + el `inventory_movement` cuando `kind === "service"`. Mantener el resto del flujo (precio del DB, payments, cash movement). Tests nuevos: una orden con un solo item servicio y otra mixta (servicio + producto) que verifiquen que el inventario fisico baja y el del servicio queda intacto.
+
+**Estado:** abierta. Bloquea el uso real del POS con servicios; la UX ya esta lista pero la venta no cierra. Estimado 1-2h.
+
 ## Convencion de cierre
 
 Cuando una deuda se resuelve:
