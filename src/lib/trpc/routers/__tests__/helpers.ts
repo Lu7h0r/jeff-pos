@@ -4,8 +4,16 @@ import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { getTableName } from "drizzle-orm";
 import * as schema from "@/lib/db/schema";
 
-// FK-safe order: referenced tables before referencing tables
+// FK-safe order: referenced tables before referencing tables.
+// schema.user (Better Auth) must come first because business_members has FK
+// to user.id. businesses must come before business_members and locations
+// (both reference businesses.id) and before customers/paymentMethods which
+// gained nullable business_id in Batch 1.
 const TABLES: PgTable[] = [
+  schema.user,
+  schema.businesses,
+  schema.businessMembers,
+  schema.locations,
   schema.products,
   schema.customers,
   schema.paymentMethods,
@@ -14,13 +22,16 @@ const TABLES: PgTable[] = [
   schema.transactions,
 ];
 
+// All identifiers are double-quoted to avoid clashes with Postgres reserved
+// words (e.g. Better Auth's "user" table). Without quotes, CREATE TABLE user
+// fails with syntax error 42601.
 function tableToDDL(table: PgTable): string {
   const { name, columns, foreignKeys } = getTableConfig(table);
 
   const colDefs = columns.map((col) => {
     const sqlType = col.getSQLType();
     const isSerial = sqlType === "serial";
-    const parts: string[] = [col.name, sqlType];
+    const parts: string[] = [`"${col.name}"`, sqlType];
 
     if (col.primary) parts.push("PRIMARY KEY");
     if (col.notNull && !isSerial) parts.push("NOT NULL");
@@ -37,10 +48,10 @@ function tableToDDL(table: PgTable): string {
     const col = ref.columns[0].name;
     const refTable = getTableName(ref.foreignColumns[0].table);
     const refCol = ref.foreignColumns[0].name;
-    return `FOREIGN KEY (${col}) REFERENCES ${refTable}(${refCol})`;
+    return `FOREIGN KEY ("${col}") REFERENCES "${refTable}"("${refCol}")`;
   });
 
-  return `CREATE TABLE IF NOT EXISTS ${name} (\n  ${[...colDefs, ...fkDefs].join(",\n  ")}\n);`;
+  return `CREATE TABLE IF NOT EXISTS "${name}" (\n  ${[...colDefs, ...fkDefs].join(",\n  ")}\n);`;
 }
 
 export const SCHEMA_DDL = TABLES.map(tableToDDL).join("\n\n");
