@@ -36,8 +36,20 @@ function tableToDDL(table: PgTable): string {
     if (col.primary) parts.push("PRIMARY KEY");
     if (col.notNull && !isSerial) parts.push("NOT NULL");
     if (col.isUnique) parts.push("UNIQUE");
-    if (col.hasDefault && !isSerial && sqlType.startsWith("timestamp")) {
-      parts.push("DEFAULT NOW()");
+    if (col.hasDefault && !isSerial) {
+      if (sqlType.startsWith("timestamp")) {
+        parts.push("DEFAULT NOW()");
+      } else {
+        // Drizzle exposes literal defaults on col.default. Emit them so PG
+        // resolves Drizzle's "default" keyword in INSERT statements. Functions
+        // and SQL expressions are skipped (Drizzle resolves them at runtime).
+        const def = (col as unknown as { default?: unknown }).default;
+        if (typeof def === "string") {
+          parts.push(`DEFAULT '${def.replace(/'/g, "''")}'`);
+        } else if (typeof def === "number" || typeof def === "boolean") {
+          parts.push(`DEFAULT ${def}`);
+        }
+      }
     }
 
     return parts.join(" ");
