@@ -67,6 +67,12 @@ export const locations = pgTable("locations", {
 // decorative legacy field: demo seed.ts and pre-Batch-3 admin pages still
 // read it. Real on-hand quantities live in inventory_balances per location.
 // Allowed status values (enforced in zod): active, draft, archived.
+// `kind` separates physical inventory items from intangible services
+// (tattoo/piercing/etc). Allowed values (enforced in zod): product, service.
+// `default_service_kind` is only relevant when kind="service" and prefills the
+// service_sales.service_kind column on attach. Allowed values (enforced in
+// zod, mirrors service_sales.service_kind): tattoo, piercing, touchup,
+// removal, consultation, other.
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -81,6 +87,8 @@ export const products = pgTable("products", {
   sku: varchar("sku", { length: 64 }),
   cost_amount: integer("cost_amount"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
+  kind: varchar("kind", { length: 20 }).notNull().default("product"),
+  default_service_kind: varchar("default_service_kind", { length: 30 }),
   created_at: timestamp("created_at").defaultNow(),
 });
 
