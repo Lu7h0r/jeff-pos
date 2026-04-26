@@ -95,11 +95,16 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | DA-7 | `schema.ts products.business_id` | media | Batch 4 (backfill + NOT NULL) | cerrada |
 | DA-8 | `orders.update` mutation | media | Batch 5 | cerrada |
 | DA-9 | `paymentMethods` lacks is_cash flag | baja | TBD (futuro batch payment-methods) | abierta |
-| DA-10 | `orders.status` legacy column | baja | post-Batch 6 cleanup | cerrada |
-| DA-11 | `transactions` row paralelo en orders.create | media | post-Batch 6 cleanup | cerrada |
+| DA-10 | `orders.status` legacy column | baja | cleanup-da10-da11 | cerrada |
+| DA-11 | `transactions` row paralelo en orders.create | media | cleanup-da10-da11 | cerrada |
 | DA-12 | weighted-average cost no implementado | media | TBD (post-pilot real) | abierta |
 | DA-13 | `purchases.cancel` con sesion cerrada sin reversa | media | TBD | abierta |
 | DA-14 | `expense_entries` sin void | media | TBD | abierta |
+| DA-15 | `resolveActiveContext` no consulta `location_members` | media | post-Batch 8 | abierta |
+| DA-16 | POS service attachment no transaccional con orders.create | media | TBD | abierta |
+| DA-17 | Splits de comision hardcoded en helper | baja | TBD | abierta |
+| DA-18 | Workstation availability sin vista calendario | baja | UX futuro | abierta |
+| DA-19 | Commission policy snapshot sin recompute pre-liquidacion | baja | UX futuro | abierta |
 
 ## DA-6 — `inventory_balances` sin UNIQUE compound
 
@@ -179,7 +184,7 @@ Recomendacion: opcion 2. El reporte de `dashboard.stats` puede separar mejor por
 3. UPDATE bulk de rows existentes (NULL them).
 4. Drop column en proxima migracion (cuando se decida usar Drizzle migrate formal).
 
-**Estado:** cerrada. Cleanup batch elimina la columna `status` de `orders` en `schema.ts`, retira el insert/select desde `orders.create/list/get/void/editNotes`, limpia `seed.ts` y los tests de `orders.test.ts` + `dashboard.test.ts`. `grep -rn 'orders\.status\|order\.status' src/` solo deja referencias a `purchaseOrders.status` (no relacionadas).
+**Estado:** abierta. No-bloqueante.
 
 ## DA-11 — `transactions` row paralelo en `orders.create`
 
@@ -198,7 +203,7 @@ Recomendacion: opcion 2. El reporte de `dashboard.stats` puede separar mejor por
 
 Recomendacion: A. La eliminacion incluye drop column `payment_method_id` en transactions, drop FKs, drop tabla, ajustar tests.
 
-**Estado:** cerrada. Cleanup batch elimina la tabla `transactions` por completo: drop del `pgTable`/relations en `schema.ts`, baja del `transactionsRouter` (router + tests), retiro del insert paralelo en `orders.create`, limpieza del seed y de `helpers.ts:TABLES`. `grep -rn 'transactions' src/` queda vacio; `db.transaction(...)` (Drizzle atomic API) se conserva, no relacionado.
+**Estado:** abierta. No-bloqueante. Bloqueante para perf si Jeff opera muchas ventas/dia (cada venta hace 2x writes redundantes).
 
 ## DA-12 — Weighted-average cost no implementado en `purchases.receive`
 
@@ -248,6 +253,56 @@ Recomendacion: A para MVP (mas estricto, evita confusion). B requiere training o
 - si el entry fue paid via cash_session, escribir reversa en cash_movements (manual_in con transaction_type=positive) si la sesion esta abierta. Si esta cerrada, aplicar la misma decision que DA-13.
 
 **Estado:** abierta. Probable bloqueante operativo cuando Jeff arranque a usar gastos en serio.
+
+## DA-15 — `resolveActiveContext` no consulta `location_members`
+
+**Ubicacion:** `src/lib/trpc/active-context.ts`. Resolver de Batch 1.5.
+
+**Impacto:** Batch 8 introdujo `location_members` para granularidad por sede (un cashier que solo opera en Britalia). El resolver actual lee solo `business_members` y deriva `activeRole` desde ahi. Resultado: si un usuario tiene `business_members.role=cashier` Y `location_members(britalia).role=artist`, el sistema lo trata como cashier en TODAS las locations en lugar de respetar el rol granular en Britalia. La proteccion hoy es solo via UI (selector de cookie), no por backend.
+
+**Resolucion:** post-Batch 8, sumar consulta a `location_members` cuando `locationId` esta resuelto. Si existe membership granular activa para esa location, sobrescribe el role en el contexto. Si no, usa el role del business membership.
+
+**Estado:** abierta. Bug de seguridad pasivo mientras Jeff opere solo con su user owner. Se vuelve real cuando contrate un cashier limitado a una sede.
+
+## DA-16 — POS service attachment no es transaccional con `orders.create`
+
+**Ubicacion:** `src/app/admin/pos/page.tsx` + `src/lib/trpc/routers/services.ts`.
+
+**Impacto:** En Batch 8, attachear un servicio (staff + commission_estimate) a una linea de orden ocurre POST-`orders.create` via mutacion separada. Si la mutation de attach falla, queda la orden creada sin el service_sale → no hay comision estimada para esa venta. El operario ve toast de error pero no hay reintento ni cola.
+
+**Resolucion:** Migrar a una mutation compuesta `orders.createWithServices` que reciba items + paymentLines + serviceAttachments en un solo input y haga TODO en una sola transaction. O mantener separado pero agregar reintento client-side con backoff.
+
+**Estado:** abierta. UI muestra error claro, operario puede intentar attach manual desde admin/orders, pero hay riesgo de que se olvide y la comision quede invisible.
+
+## DA-17 — Splits de comision hardcoded en helper
+
+**Ubicacion:** `src/lib/trpc/commission-split.ts`. Tres opciones predefinidas (30/70, 50/50, 70/30) + owner_direct + manual.
+
+**Impacto:** Si Jeff acuerda 40/60 con un artista nuevo, no hay forma de configurarlo sin tocar codigo. Workaround: `manual` queda en cero hasta liquidacion humana. Funciona, pero pierde la utilidad de la estimacion automatica.
+
+**Resolucion:** crear tabla `commission_splits(business_id, name, staff_basis_points)` y `staff_members.split_id` FK opcional que sobreescribe `default_split`. Splits configurables por business sin tocar codigo.
+
+**Estado:** abierta. Bloqueante operativo solo si Jeff tiene staff con splits no estandar.
+
+## DA-18 — Workstation availability sin vista calendario
+
+**Ubicacion:** `src/app/admin/station-rentals/page.tsx`.
+
+**Impacto:** Lista plana agrupada por dia. Operario no ve "Cabina 1 esta libre 14-18h" sin scrollear. Para piloto rapido alcanza, para uso real Jeff necesita ver disponibilidad continua.
+
+**Resolucion:** integrar libreria de calendario (FullCalendar / react-big-calendar) cuando haya volumen real de bookings. UX no funcional.
+
+**Estado:** abierta. No-bloqueante.
+
+## DA-19 — Commission policy snapshot sin recompute pre-liquidacion
+
+**Ubicacion:** `src/lib/trpc/routers/services.ts`.
+
+**Impacto:** Si Jeff cambia `staff_members.default_split` despues de attachear un servicio, `commission_estimates` ya creado conserva el split viejo (correcto: snapshot inmutable). Pero no hay UI para "recalcular esta estimacion porque la situacion del staff cambio" antes de liquidar — el manager tiene que voidear la estimacion vieja y crear una nueva manual.
+
+**Resolucion:** endpoint `services.commissions.recompute({ commissionEstimateId })` que tome el split actual del staff y reemplace los amounts. Solo permitido en estado `estimated` (no en `liquidated`).
+
+**Estado:** abierta. UX de matiz, no critico.
 
 ## Convencion de cierre
 
