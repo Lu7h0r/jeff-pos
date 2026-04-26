@@ -17,6 +17,7 @@ import { workstationsRouter } from "./routers/workstations";
 import { stationRentalsRouter } from "./routers/station-rentals";
 import { servicesRouter } from "./routers/services";
 import { locationMembersRouter } from "./routers/location-members";
+import { teamRouter } from "./routers/team";
 
 export const appRouter = router({
   products: productsRouter,
@@ -36,6 +37,7 @@ export const appRouter = router({
   stationRentals: stationRentalsRouter,
   services: servicesRouter,
   locationMembers: locationMembersRouter,
+  team: teamRouter,
 });
 
 export type AppRouter = typeof appRouter;
