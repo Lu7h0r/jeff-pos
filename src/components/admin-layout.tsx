@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useTRPC } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -37,6 +39,7 @@ import {
   ClockIcon,
   MenuIcon,
   XIcon,
+  UsersRoundIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -64,7 +67,30 @@ const navItems: NavItem[] = [
   { href: "/admin/workstations", label: "Workstations", icon: MonitorIcon },
   { href: "/admin/station-rentals", label: "Station rentals", icon: ClockIcon },
   { href: "/admin/pos", label: "Point of Sale", icon: ShoppingCartIcon },
+  { href: "/admin/team", label: "Team", icon: UsersRoundIcon },
 ];
+
+// Visual gate by role. The backend `requireRole` middleware is the security
+// boundary; this map only hides nav items the role cannot use anyway. Any
+// route NOT listed in a role's set is hidden. Owners and managers see
+// everything, with Team management restricted to owner.
+const NAV_BY_ROLE: Record<string, ReadonlySet<string>> = {
+  owner: new Set(navItems.map((item) => item.href)),
+  manager: new Set(
+    navItems
+      .filter((item) => item.href !== "/admin/team")
+      .map((item) => item.href),
+  ),
+  cashier: new Set([
+    "/admin",
+    "/admin/pos",
+    "/admin/cashier",
+    "/admin/customers",
+    "/admin/inventory",
+  ]),
+  artist: new Set(["/admin", "/admin/pos", "/admin/customers"]),
+  viewer: new Set(["/admin"]),
+};
 
 const pageNames: Record<string, string> = Object.fromEntries(
   navItems.map((item) => [item.href, item.label])
@@ -73,6 +99,16 @@ const pageNames: Record<string, string> = Object.fromEntries(
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const trpc = useTRPC();
+  const businessQuery = useQuery(trpc.businesses.getCurrent.queryOptions());
+  const role = businessQuery.data?.role ?? null;
+
+  const visibleNavItems = useMemo(() => {
+    if (!role) return navItems;
+    const allowed = NAV_BY_ROLE[role];
+    if (!allowed) return navItems;
+    return navItems.filter((item) => allowed.has(item.href));
+  }, [role]);
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -149,7 +185,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 <XIcon className="h-5 w-5" />
               </Button>
             </div>
-            {navItems.map(({ href, label, icon: Icon }) => (
+            {visibleNavItems.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
@@ -172,7 +208,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <aside className="fixed mt-[56px] inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-background sm:flex">
           <nav className="flex flex-col items-center gap-4 px-2 sm:py-5">
             <TooltipProvider>
-              {navItems.map(({ href, label, icon: Icon }) => (
+              {visibleNavItems.map(({ href, label, icon: Icon }) => (
                 <Tooltip key={href}>
                   <TooltipTrigger asChild>
                     <Link
