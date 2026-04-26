@@ -125,6 +125,11 @@ export function makeUser(id: string) {
  * activeLocationId. For tests that only need an authenticated user, passing
  * `{ user: makeUser(uid) }` to the caller factory still works because router
  * code uses `ctx.activeBusinessId != null` (catches both null and undefined).
+ *
+ * Defaults `role` to `"owner"` so tests that exercise routers with the new
+ * role-guard middleware (Auth Management batch) keep passing without having
+ * to opt into a role explicitly. Tests that need to assert FORBIDDEN for a
+ * specific role must pass it explicitly (e.g. `role: "cashier"`).
  */
 export function makeContext(
   uid: string,
@@ -132,12 +137,16 @@ export function makeContext(
     businessId?: number | null;
     locationId?: number | null;
     role?: string | null;
+    isLocationScoped?: boolean;
+    effectiveLocationIds?: number[];
   },
 ) {
   return {
     user: makeUser(uid),
     activeBusinessId: active?.businessId ?? null,
     activeLocationId: active?.locationId ?? null,
-    activeRole: active?.role ?? null,
+    activeRole: active?.role === undefined ? "owner" : active.role,
+    isLocationScoped: active?.isLocationScoped ?? false,
+    effectiveLocationIds: active?.effectiveLocationIds ?? [],
   };
 }

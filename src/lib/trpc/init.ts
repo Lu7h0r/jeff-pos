@@ -12,6 +12,8 @@ export interface TRPCContext {
   activeBusinessId: number | null;
   activeLocationId: number | null;
   activeRole: string | null;
+  isLocationScoped: boolean;
+  effectiveLocationIds: number[];
 }
 
 export const createTRPCContext = async (): Promise<TRPCContext> => {
@@ -23,6 +25,8 @@ export const createTRPCContext = async (): Promise<TRPCContext> => {
       activeBusinessId: null,
       activeLocationId: null,
       activeRole: null,
+      isLocationScoped: false,
+      effectiveLocationIds: [],
     };
   }
 
@@ -34,13 +38,23 @@ export const createTRPCContext = async (): Promise<TRPCContext> => {
       ? locationIdHint
       : null;
 
-  const active = await resolveActiveContext(user.id, safeHint);
+  let active: Awaited<ReturnType<typeof resolveActiveContext>> = null;
+  try {
+    active = await resolveActiveContext(user.id, safeHint);
+  } catch {
+    // Data integrity error (e.g. location_members spanning multiple
+    // businesses). Surface as "no active context" so guarded routes return
+    // FORBIDDEN rather than crashing the request.
+    active = null;
+  }
 
   return {
     user,
     activeBusinessId: active?.businessId ?? null,
     activeLocationId: active?.locationId ?? null,
     activeRole: active?.role ?? null,
+    isLocationScoped: active?.isLocationScoped ?? false,
+    effectiveLocationIds: active?.effectiveLocationIds ?? [],
   };
 };
 
