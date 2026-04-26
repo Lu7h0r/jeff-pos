@@ -1,17 +1,57 @@
 import { mock, describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { createTestDb, makeUser, SCHEMA_DDL } from "./helpers";
+import { createTestDb, makeContext, SCHEMA_DDL } from "./helpers";
 
 const { pg, db } = createTestDb();
 mock.module("@/lib/db", () => ({ db, pglite: pg }));
 
 const { productsRouter } = await import("../products");
 const { createCallerFactory } = await import("../../init");
+const schema = await import("@/lib/db/schema");
 
-const caller = createCallerFactory(productsRouter)({ user: makeUser("user-1") });
-const callerAs = (uid: string) =>
-  createCallerFactory(productsRouter)({ user: makeUser(uid) });
+// Pre-seeded business ids resolved in beforeAll. Each test user owns its
+// own business so cross-user filtering still works after Batch 4 made
+// products.business_id NOT NULL.
+let bizUser1Id = 0;
+let bizOtherId = 0;
 
-beforeAll(async () => { await pg.exec(SCHEMA_DDL); });
+const factory = createCallerFactory(productsRouter);
+const caller = {
+  create: (input: Parameters<ReturnType<typeof factory>["create"]>[0]) =>
+    factory(makeContext("user-1", { businessId: bizUser1Id })).create(input),
+  list: () => factory(makeContext("user-1", { businessId: bizUser1Id })).list(),
+  update: (input: Parameters<ReturnType<typeof factory>["update"]>[0]) =>
+    factory(makeContext("user-1", { businessId: bizUser1Id })).update(input),
+  delete: (input: Parameters<ReturnType<typeof factory>["delete"]>[0]) =>
+    factory(makeContext("user-1", { businessId: bizUser1Id })).delete(input),
+};
+const callerAs = (uid: string, businessId: number) =>
+  factory(makeContext(uid, { businessId }));
+
+beforeAll(async () => {
+  await pg.exec(SCHEMA_DDL);
+
+  await db.insert(schema.user).values([
+    { id: "user-1", name: "U1", email: "u1@test.com", emailVerified: false, image: null },
+    { id: "other-user", name: "Other", email: "other@test.com", emailVerified: false, image: null },
+    { id: "attacker", name: "Atk", email: "atk@test.com", emailVerified: false, image: null },
+  ]);
+
+  const [b1, bOther] = await db
+    .insert(schema.businesses)
+    .values([
+      { name: "User1 Biz", slug: "user1" },
+      { name: "Other Biz", slug: "other-biz" },
+    ])
+    .returning();
+  bizUser1Id = b1.id;
+  bizOtherId = bOther.id;
+
+  await db.insert(schema.businessMembers).values([
+    { business_id: bizUser1Id, user_id: "user-1", role: "owner", status: "active" },
+    { business_id: bizOtherId, user_id: "other-user", role: "owner", status: "active" },
+    { business_id: bizUser1Id, user_id: "attacker", role: "cashier", status: "active" },
+  ]);
+});
 afterAll(async () => { await pg.close(); });
 
 describe("products.list", () => {
@@ -23,7 +63,7 @@ describe("products.list", () => {
 
   it("filters by user_uid — does not leak cross-user data", async () => {
     await caller.create({ name: "P1", price: 100, in_stock: 10 });
-    const other = callerAs("other-user");
+    const other = callerAs("other-user", bizOtherId);
     await other.create({ name: "P-other", price: 50, in_stock: 5 });
 
     const list = await caller.list();
@@ -125,7 +165,7 @@ describe("products.update", () => {
 
   it("cross-user update fails and original data is untouched", async () => {
     const p = await caller.create({ name: "Mine", price: 100, in_stock: 1 });
-    const other = callerAs("attacker");
+    const other = callerAs("attacker", bizUser1Id);
     await expect(other.update({ id: p.id, name: "Hacked" })).rejects.toThrow();
 
     const list = await caller.list();
