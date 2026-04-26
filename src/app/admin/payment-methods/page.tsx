@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/v4";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PlusCircle, FilePenIcon, TrashIcon, CreditCardIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,17 +20,20 @@ import type { RouterOutputs } from "@/lib/trpc/router";
 
 type PaymentMethod = RouterOutputs["paymentMethods"]["list"][number];
 
-const paymentMethodSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-});
-
-const tableColumns: Column<PaymentMethod>[] = [
-  { key: "name", header: "Name", sortable: true, className: "font-medium" },
-];
-
 export default function PaymentMethodsPage() {
+  const t = useTranslations("paymentMethods");
+  const tc = useTranslations("common");
+  const tv = useTranslations("validation");
   const trpc = useTRPC();
   const { data: methods = [], isLoading, error } = useQuery(trpc.paymentMethods.list.queryOptions());
+
+  const paymentMethodSchema = z.object({
+    name: z.string().min(1, tv("nameRequired")),
+  });
+
+  const tableColumns: Column<PaymentMethod>[] = [
+    { key: "name", header: tc("name"), sortable: true, className: "font-medium" },
+  ];
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -42,24 +46,24 @@ export default function PaymentMethodsPage() {
   const createMutation = useCrudMutation({
     mutationOptions: trpc.paymentMethods.create.mutationOptions(),
     invalidateKeys,
-    successMessage: "Payment method created",
-    errorMessage: "Failed to create",
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
     onSuccess: () => setIsDialogOpen(false),
   });
 
   const updateMutation = useCrudMutation({
     mutationOptions: trpc.paymentMethods.update.mutationOptions(),
     invalidateKeys,
-    successMessage: "Payment method updated",
-    errorMessage: "Failed to update",
+    successMessage: t("updated"),
+    errorMessage: t("updateFailed"),
     onSuccess: () => setIsDialogOpen(false),
   });
 
   const deleteMutation = useCrudMutation({
     mutationOptions: trpc.paymentMethods.delete.mutationOptions(),
     invalidateKeys,
-    successMessage: "Payment method deleted",
-    errorMessage: "Failed to delete",
+    successMessage: t("deleted"),
+    errorMessage: t("deleteFailed"),
   });
 
   const form = useForm({
@@ -99,12 +103,12 @@ export default function PaymentMethodsPage() {
 
   const actionsColumn: Column<PaymentMethod> = {
     key: "actions",
-    header: "Actions",
+    header: tc("actions"),
     headerClassName: "w-[100px]",
     render: (row) => (
       <TableActions>
-        <TableActionButton onClick={() => openEdit(row)} icon={<FilePenIcon className="w-4 h-4" />} label="Edit" />
-        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label="Delete" />
+        <TableActionButton onClick={() => openEdit(row)} icon={<FilePenIcon className="w-4 h-4" />} label={tc("edit")} />
+        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label={tc("delete")} />
       </TableActions>
     ),
   };
@@ -126,16 +130,16 @@ export default function PaymentMethodsPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-muted-foreground">
             <CreditCardIcon className="w-5 h-5" />
-            <span className="text-sm">{methods.length} method{methods.length !== 1 && "s"}</span>
+            <span className="text-sm">{t("count", { count: methods.length })}</span>
           </div>
-          <Button size="sm" onClick={openCreate}><PlusCircle className="w-4 h-4 mr-2" />Add Method</Button>
+          <Button size="sm" onClick={openCreate}><PlusCircle className="w-4 h-4 mr-2" />{t("addMethod")}</Button>
         </div>
       </CardHeader>
       <CardContent className="p-0">
         <DataTable
           data={methods}
           columns={[...tableColumns, actionsColumn]}
-          emptyMessage="No payment methods found."
+          emptyMessage={t("empty")}
           emptyIcon={<CreditCardIcon className="w-8 h-8" />}
           defaultSort={[{ id: "name", desc: false }]}
         />
@@ -143,7 +147,7 @@ export default function PaymentMethodsPage() {
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setIsDialogOpen(false); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{isEditing ? "Edit Payment Method" : "New Payment Method"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{isEditing ? t("editTitle") : t("newTitle")}</DialogTitle></DialogHeader>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -155,14 +159,14 @@ export default function PaymentMethodsPage() {
               <form.Field name="name">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="method-name">Name</Label>
+                    <Label htmlFor="method-name">{tc("name")}</Label>
                     <div className="col-span-3">
                       <Input
                         id="method-name"
                         value={field.state.value}
                         onChange={(e) => field.handleChange(e.target.value)}
                         onBlur={field.handleBlur}
-                        placeholder="e.g. Credit Card, PIX, Cash"
+                        placeholder={t("namePlaceholder")}
                         error={field.state.meta.errors.length > 0 ? field.state.meta.errors.map(e => e?.message ?? e).join(", ") : undefined}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); form.handleSubmit(); } }}
                       />
@@ -172,11 +176,11 @@ export default function PaymentMethodsPage() {
               </form.Field>
             </div>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+              <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>{tc("cancel")}</Button>
               <form.Subscribe selector={(state) => state.isSubmitting}>
                 {(isSubmitting) => (
                   <Button type="submit" disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}>
-                    {isEditing ? "Update" : "Create"}
+                    {isEditing ? tc("update") : tc("create")}
                   </Button>
                 )}
               </form.Subscribe>
@@ -185,7 +189,7 @@ export default function PaymentMethodsPage() {
         </DialogContent>
       </Dialog>
 
-      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description="Are you sure you want to delete this payment method? Transactions using this method may be affected." />
+      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description={t("deleteConfirm")} />
     </Card>
   );
 }

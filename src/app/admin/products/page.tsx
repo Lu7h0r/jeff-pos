@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/v4";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FilePenIcon, TrashIcon, PlusIcon, PackageIcon } from "lucide-react";
@@ -29,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTRPC } from "@/lib/trpc/client";
 import { useQuery } from "@tanstack/react-query";
 import { useCrudMutation } from "@/hooks/use-crud-mutation";
+import { formatCurrency } from "@/lib/utils";
 import { DataTable, TableActions, TableActionButton, type Column, type ExportColumn } from "@/components/ui/data-table";
 import { SearchFilter, type FilterOption } from "@/components/ui/search-filter";
 import type { RouterOutputs } from "@/lib/trpc/router";
@@ -52,84 +54,10 @@ const SERVICE_KIND_OPTIONS: ServiceKind[] = [
   "other",
 ];
 
-const productFormSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    description: z.string(),
-    price: z.number().min(0, "Price must be positive"),
-    in_stock: z.number().int().min(0, "Stock must be non-negative"),
-    category: z.string(),
-    kind: z.enum(["product", "service"]),
-    default_service_kind: z.string(),
-  })
-  .refine(
-    (v) => v.kind !== "service" || v.default_service_kind !== "",
-    {
-      message: "Pick a service kind",
-      path: ["default_service_kind"],
-    },
-  );
-
-const categoryFilterOptions: FilterOption[] = [
-  { label: "All", value: "all" },
-  { label: "Electronics", value: "electronics" },
-  { label: "Home", value: "home" },
-  { label: "Health", value: "health" },
-];
-
-const stockFilterOptions: FilterOption[] = [
-  { label: "All Stock", value: "all" },
-  { label: "In Stock", value: "in-stock", variant: "success" },
-  { label: "Out of Stock", value: "out-of-stock", variant: "danger" },
-];
-
-const kindFilterOptions: FilterOption[] = [
-  { label: "All", value: "all" },
-  { label: "Productos", value: "product" },
-  { label: "Servicios", value: "service", variant: "success" },
-];
-
-const columns: Column<Product>[] = [
-  { key: "name", header: "Product", sortable: true, className: "font-medium" },
-  {
-    key: "kind",
-    header: "Tipo",
-    sortable: true,
-    render: (row) =>
-      row.kind === "service" ? (
-        <Badge variant="default">
-          Servicio{row.default_service_kind ? ` · ${row.default_service_kind}` : ""}
-        </Badge>
-      ) : (
-        <Badge variant="secondary">Producto</Badge>
-      ),
-  },
-  { key: "description", header: "Description", hideOnMobile: true },
-  {
-    key: "price",
-    header: "Price",
-    sortable: true,
-    accessorFn: (row) => row.price,
-    render: (row) => `$${(row.price / 100).toFixed(2)}`,
-  },
-  { key: "in_stock", header: "Stock", sortable: true },
-];
-
-const exportColumns: ExportColumn<Product>[] = [
-  { key: "name", header: "Name", getValue: (p) => p.name },
-  { key: "kind", header: "Kind", getValue: (p) => p.kind },
-  {
-    key: "default_service_kind",
-    header: "Service Kind",
-    getValue: (p) => p.default_service_kind ?? "",
-  },
-  { key: "description", header: "Description", getValue: (p) => p.description ?? "" },
-  { key: "price", header: "Price", getValue: (p) => (p.price / 100).toFixed(2) },
-  { key: "in_stock", header: "Stock", getValue: (p) => p.in_stock },
-  { key: "category", header: "Category", getValue: (p) => p.category ?? "" },
-];
-
 export default function Products() {
+  const t = useTranslations("products");
+  const tc = useTranslations("common");
+  const tv = useTranslations("validation");
   const trpc = useTRPC();
   const { data: products = [], isLoading } = useQuery(trpc.products.list.queryOptions());
 
@@ -145,27 +73,110 @@ export default function Products() {
   const isEditing = editingId !== null;
   const invalidateKeys = trpc.products.list.queryOptions().queryKey;
 
+  const tServiceKind = (k: ServiceKind) => t(`serviceKinds.${k}`);
+
+  const productFormSchema = z
+    .object({
+      name: z.string().min(1, tv("nameRequired")),
+      description: z.string(),
+      price: z.number().min(0, tv("mustBePositive")),
+      in_stock: z.number().int().min(0, tv("stockNonNegative")),
+      category: z.string(),
+      kind: z.enum(["product", "service"]),
+      default_service_kind: z.string(),
+    })
+    .refine(
+      (v) => v.kind !== "service" || v.default_service_kind !== "",
+      {
+        message: tv("pickServiceKind"),
+        path: ["default_service_kind"],
+      },
+    );
+
+  const categoryFilterOptions: FilterOption[] = [
+    { label: t("categoryAll"), value: "all" },
+    { label: t("categoryElectronics"), value: "electronics" },
+    { label: t("categoryHome"), value: "home" },
+    { label: t("categoryHealth"), value: "health" },
+  ];
+
+  const stockFilterOptions: FilterOption[] = [
+    { label: t("stockAll"), value: "all" },
+    { label: t("stockIn"), value: "in-stock", variant: "success" },
+    { label: t("stockOut"), value: "out-of-stock", variant: "danger" },
+  ];
+
+  const kindFilterOptions: FilterOption[] = [
+    { label: t("filterAll"), value: "all" },
+    { label: t("filterProducts"), value: "product" },
+    { label: t("filterServices"), value: "service", variant: "success" },
+  ];
+
+  const columns: Column<Product>[] = [
+    { key: "name", header: t("colProduct"), sortable: true, className: "font-medium" },
+    {
+      key: "kind",
+      header: t("colKind"),
+      sortable: true,
+      render: (row) =>
+        row.kind === "service" ? (
+          <Badge variant="default">
+            {row.default_service_kind
+              ? t("kindServiceWith", {
+                  kind: tServiceKind(row.default_service_kind as ServiceKind),
+                })
+              : t("kindService")}
+          </Badge>
+        ) : (
+          <Badge variant="secondary">{t("kindProduct")}</Badge>
+        ),
+    },
+    { key: "description", header: t("colDescription"), hideOnMobile: true },
+    {
+      key: "price",
+      header: t("colPrice"),
+      sortable: true,
+      accessorFn: (row) => row.price,
+      render: (row) => formatCurrency(row.price),
+    },
+    { key: "in_stock", header: t("colStock"), sortable: true },
+  ];
+
+  const exportColumns: ExportColumn<Product>[] = [
+    { key: "name", header: tc("name"), getValue: (p) => p.name },
+    { key: "kind", header: t("colKind"), getValue: (p) => p.kind },
+    {
+      key: "default_service_kind",
+      header: t("serviceKindLabel"),
+      getValue: (p) => p.default_service_kind ?? "",
+    },
+    { key: "description", header: t("colDescription"), getValue: (p) => p.description ?? "" },
+    { key: "price", header: t("colPrice"), getValue: (p) => (p.price / 100).toFixed(2) },
+    { key: "in_stock", header: t("colStock"), getValue: (p) => p.in_stock },
+    { key: "category", header: t("categoryLabel"), getValue: (p) => p.category ?? "" },
+  ];
+
   const createMutation = useCrudMutation({
     mutationOptions: trpc.products.create.mutationOptions(),
     invalidateKeys,
-    successMessage: "Product created",
-    errorMessage: "Failed to create product",
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
     onSuccess: () => setIsDialogOpen(false),
   });
 
   const updateMutation = useCrudMutation({
     mutationOptions: trpc.products.update.mutationOptions(),
     invalidateKeys,
-    successMessage: "Product updated",
-    errorMessage: "Failed to update product",
+    successMessage: t("updated"),
+    errorMessage: t("updateFailed"),
     onSuccess: () => setIsDialogOpen(false),
   });
 
   const deleteMutation = useCrudMutation({
     mutationOptions: trpc.products.delete.mutationOptions(),
     invalidateKeys,
-    successMessage: "Product deleted",
-    errorMessage: "Failed to delete product",
+    successMessage: t("deleted"),
+    errorMessage: t("deleteFailed"),
   });
 
   const form = useForm({
@@ -250,11 +261,11 @@ export default function Products() {
 
   const actionsColumn: Column<Product> = {
     key: "actions",
-    header: "Actions",
+    header: tc("actions"),
     render: (row) => (
       <TableActions>
-        <TableActionButton onClick={() => openEdit(row)} icon={<FilePenIcon className="w-4 h-4" />} label="Edit" />
-        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label="Delete" />
+        <TableActionButton onClick={() => openEdit(row)} icon={<FilePenIcon className="w-4 h-4" />} label={tc("edit")} />
+        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label={tc("delete")} />
       </TableActions>
     ),
   };
@@ -277,7 +288,7 @@ export default function Products() {
           <SearchFilter
             search={searchTerm}
             onSearchChange={setSearchTerm}
-            searchPlaceholder="Search products..."
+            searchPlaceholder={t("searchPlaceholder")}
             filters={[
               { options: kindFilterOptions, value: kindFilter, onChange: setKindFilter },
               { options: categoryFilterOptions, value: categoryFilter, onChange: setCategoryFilter },
@@ -285,7 +296,7 @@ export default function Products() {
             ]}
           >
             <Button size="sm" onClick={openCreate}>
-              <PlusIcon className="w-4 h-4 mr-2" />Add Product
+              <PlusIcon className="w-4 h-4 mr-2" />{t("addProduct")}
             </Button>
           </SearchFilter>
         </CardHeader>
@@ -295,7 +306,7 @@ export default function Products() {
             columns={[...columns, actionsColumn]}
             exportColumns={exportColumns}
             exportFilename="products"
-            emptyMessage="No products found."
+            emptyMessage={t("empty")}
             emptyIcon={<PackageIcon className="w-8 h-8" />}
             defaultSort={[{ id: "name", desc: false }]}
           />
@@ -305,8 +316,8 @@ export default function Products() {
       <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setIsDialogOpen(false); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{isEditing ? "Edit Product" : "Add New Product"}</DialogTitle>
-            <DialogDescription>{isEditing ? "Edit the details of the product." : "Enter the details of the new product."}</DialogDescription>
+            <DialogTitle>{isEditing ? t("editTitle") : t("createTitle")}</DialogTitle>
+            <DialogDescription>{isEditing ? t("editSubtitle") : t("createSubtitle")}</DialogDescription>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -319,7 +330,7 @@ export default function Products() {
               <form.Field name="kind">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="kind" className="sm:text-right">Tipo</Label>
+                    <Label htmlFor="kind" className="sm:text-right">{t("kindLabel")}</Label>
                     <Select
                       value={field.state.value}
                       onValueChange={(v) => {
@@ -332,8 +343,8 @@ export default function Products() {
                     >
                       <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="product">Producto</SelectItem>
-                        <SelectItem value="service">Servicio</SelectItem>
+                        <SelectItem value="product">{t("kindProduct")}</SelectItem>
+                        <SelectItem value="service">{t("kindService")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -345,16 +356,16 @@ export default function Products() {
                     <form.Field name="default_service_kind">
                       {(field) => (
                         <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                          <Label htmlFor="default_service_kind" className="sm:text-right">Tipo de servicio</Label>
+                          <Label htmlFor="default_service_kind" className="sm:text-right">{t("serviceKindLabel")}</Label>
                           <div className="col-span-3">
                             <Select
                               value={field.state.value}
                               onValueChange={(v) => field.handleChange(v)}
                             >
-                              <SelectTrigger><SelectValue placeholder="Tatuaje, piercing, ..." /></SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder={t("serviceKindPlaceholder")} /></SelectTrigger>
                               <SelectContent>
                                 {SERVICE_KIND_OPTIONS.map((sk) => (
-                                  <SelectItem key={sk} value={sk}>{sk}</SelectItem>
+                                  <SelectItem key={sk} value={sk}>{tServiceKind(sk)}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -373,7 +384,7 @@ export default function Products() {
               <form.Field name="name">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="name" className="sm:text-right">Name</Label>
+                    <Label htmlFor="name" className="sm:text-right">{t("nameLabel")}</Label>
                     <div className="col-span-3">
                       <Input
                         id="name"
@@ -389,7 +400,7 @@ export default function Products() {
               <form.Field name="description">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="description" className="sm:text-right">Description</Label>
+                    <Label htmlFor="description" className="sm:text-right">{t("descriptionLabel")}</Label>
                     <Input id="description" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} className="col-span-3" />
                   </div>
                 )}
@@ -397,7 +408,7 @@ export default function Products() {
               <form.Field name="price">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="price" className="sm:text-right">Price</Label>
+                    <Label htmlFor="price" className="sm:text-right">{t("priceLabel")}</Label>
                     <div className="col-span-3">
                       <Input
                         id="price"
@@ -415,7 +426,7 @@ export default function Products() {
               <form.Field name="in_stock">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="in_stock" className="sm:text-right">In Stock</Label>
+                    <Label htmlFor="in_stock" className="sm:text-right">{t("inStockLabel")}</Label>
                     <div className="col-span-3">
                       <Input
                         id="in_stock"
@@ -432,14 +443,14 @@ export default function Products() {
               <form.Field name="category">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="category" className="sm:text-right">Category</Label>
+                    <Label htmlFor="category" className="sm:text-right">{t("categoryLabel")}</Label>
                     <Select value={field.state.value} onValueChange={(value) => field.handleChange(value)}>
-                      <SelectTrigger className="col-span-3"><SelectValue placeholder="Select a category" /></SelectTrigger>
+                      <SelectTrigger className="col-span-3"><SelectValue placeholder={t("selectCategory")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="electronics">Electronics</SelectItem>
-                        <SelectItem value="clothing">Clothing</SelectItem>
-                        <SelectItem value="books">Books</SelectItem>
-                        <SelectItem value="home">Home</SelectItem>
+                        <SelectItem value="electronics">{t("categoryElectronics")}</SelectItem>
+                        <SelectItem value="clothing">{t("categoryClothing")}</SelectItem>
+                        <SelectItem value="books">{t("categoryBooks")}</SelectItem>
+                        <SelectItem value="home">{t("categoryHome")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -450,7 +461,7 @@ export default function Products() {
               <form.Subscribe selector={(state) => state.isSubmitting}>
                 {(isSubmitting) => (
                   <Button type="submit" disabled={isSubmitting || createMutation.isPending || updateMutation.isPending}>
-                    {isEditing ? "Update Product" : "Add Product"}
+                    {isEditing ? t("updateButton") : t("addButton")}
                   </Button>
                 )}
               </form.Subscribe>
@@ -459,7 +470,7 @@ export default function Products() {
         </DialogContent>
       </Dialog>
 
-      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description="Are you sure you want to delete this product? This action cannot be undone." />
+      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description={t("deleteConfirm")} />
     </>
   );
 }
