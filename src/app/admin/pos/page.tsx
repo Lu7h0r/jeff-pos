@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -18,9 +18,11 @@ import {
   Loader2Icon,
   MinusIcon,
   PlusIcon,
+  ScissorsIcon,
   SearchIcon,
   Trash2Icon,
   UserIcon,
+  PackageIcon,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -57,6 +59,8 @@ type ServiceKind =
   | "consultation"
   | "other";
 
+type ProductKind = "product" | "service";
+
 // Per-cart-line service attachment intent. Resolved AFTER orders.create
 // succeeds: we map each created order_item back to its productId and call
 // services.attachToOrderItem. This is post-sale enrichment and never blocks
@@ -64,6 +68,7 @@ type ServiceKind =
 // rolled-back sale.
 type ServiceIntent = {
   staffMemberId: number;
+  staffDisplayName: string;
   serviceKind: ServiceKind;
   bodyLocation?: string;
 };
@@ -74,7 +79,24 @@ type CartItem = {
   unitPrice: number;
   onHand: number;
   quantity: number;
+  kind: ProductKind;
+  defaultServiceKind: ServiceKind | null;
   service?: ServiceIntent;
+};
+
+// Unified catalogue row — covers physical (with on-hand from balances) and
+// service (intangible, no on-hand). Built client-side from two queries: the
+// inventory balances feed (physical only) plus products.list filtered to
+// kind=service. Keeping catalogue assembly in the page keeps the routers
+// untouched while still letting the operator search both kinds inline.
+type CatalogueItem = {
+  productId: number;
+  name: string;
+  sku: string | null;
+  kind: ProductKind;
+  defaultServiceKind: ServiceKind | null;
+  unitPrice: number;
+  onHand: number; // Number.POSITIVE_INFINITY for services
 };
 
 const SERVICE_KINDS: ServiceKind[] = [
@@ -119,6 +141,11 @@ export default function POSPage() {
     enabled: locationId != null && sessionQuery.data != null,
   });
 
+  const productsQuery = useQuery({
+    ...trpc.products.list.queryOptions(),
+    enabled: locationId != null && sessionQuery.data != null,
+  });
+
   const customersQuery = useQuery(trpc.customers.list.queryOptions());
   const paymentMethodsQuery = useQuery(trpc.paymentMethods.list.queryOptions());
   const staffQuery = useQuery(trpc.staff.list.queryOptions());
@@ -157,7 +184,9 @@ export default function POSPage() {
             if (!orderItem) return null;
             return {
               orderItemId: orderItem.id,
-              ...c.service,
+              staffMemberId: c.service.staffMemberId,
+              serviceKind: c.service.serviceKind,
+              bodyLocation: c.service.bodyLocation,
             };
           })
           .filter((x): x is NonNullable<typeof x> => x != null);
@@ -205,17 +234,61 @@ export default function POSPage() {
     bodyLocation: string;
   }>({ staffMemberId: "", serviceKind: "tattoo", bodyLocation: "" });
 
-  const balances = balancesQuery.data ?? [];
-  const filteredBalances = useMemo(() => {
-    const inStock = balances.filter((b) => b.quantity_on_hand > 0);
-    if (!productSearch.trim()) return inStock;
+  // Catalogue assembly: physical products from inventory_balances joined with
+  // services from products.list. Services have no on-hand so we plug
+  // POSITIVE_INFINITY to keep the cart logic uniform; the server still owns
+  // the truth on stock, so a stale cap here can never oversell.
+  const catalogue: CatalogueItem[] = useMemo(() => {
+    const balances = balancesQuery.data ?? [];
+    const allProducts = productsQuery.data ?? [];
+    const productById = new Map(allProducts.map((p) => [p.id, p]));
+
+    const physical: CatalogueItem[] = balances
+      .filter((b) => b.quantity_on_hand > 0)
+      .map((b) => {
+        const product = productById.get(b.product_id);
+        return {
+          productId: b.product_id,
+          name: b.product_name,
+          sku: b.sku ?? null,
+          kind: "product" as ProductKind,
+          defaultServiceKind: null,
+          unitPrice: product?.price ?? 0,
+          onHand: b.quantity_on_hand,
+        };
+      });
+
+    const services: CatalogueItem[] = allProducts
+      .filter((p) => p.kind === "service")
+      .map((p) => ({
+        productId: p.id,
+        name: p.name,
+        sku: null,
+        kind: "service" as ProductKind,
+        defaultServiceKind: (p.default_service_kind ?? null) as ServiceKind | null,
+        unitPrice: p.price,
+        onHand: Number.POSITIVE_INFINITY,
+      }));
+
+    return [...services, ...physical];
+  }, [balancesQuery.data, productsQuery.data]);
+
+  const filteredCatalogue = useMemo(() => {
+    if (!productSearch.trim()) return catalogue;
     const q = productSearch.toLowerCase();
-    return inStock.filter(
-      (b) =>
-        b.product_name.toLowerCase().includes(q) ||
-        (b.sku ?? "").toLowerCase().includes(q),
+    return catalogue.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.sku ?? "").toLowerCase().includes(q),
     );
-  }, [balances, productSearch]);
+  }, [catalogue, productSearch]);
+
+  const groupedCatalogue = useMemo(() => {
+    return {
+      services: filteredCatalogue.filter((c) => c.kind === "service"),
+      products: filteredCatalogue.filter((c) => c.kind === "product"),
+    };
+  }, [filteredCatalogue]);
 
   const total = cart.reduce((sum, c) => sum + c.unitPrice * c.quantity, 0);
   const paymentsTotal = paymentLines.reduce(
@@ -232,39 +305,50 @@ export default function POSPage() {
     paymentsMatch &&
     allPaymentsAssigned;
 
-  const handleAddProduct = (productId: number | string) => {
-    const balance = balances.find((b) => b.product_id === Number(productId));
-    if (!balance) return;
-    if (balance.quantity_on_hand <= 0) {
-      toast.error(`${balance.product_name} is out of stock`);
+  const unassignedServiceCount = cart.filter(
+    (c) => c.kind === "service" && !c.service,
+  ).length;
+
+  const handleAddCatalogueItem = (productId: number) => {
+    const item = catalogue.find((c) => c.productId === productId);
+    if (!item) return;
+    if (item.onHand <= 0) {
+      toast.error(`${item.name} is out of stock`);
       return;
     }
     setCart((prev) => {
-      const existing = prev.find((c) => c.productId === balance.product_id);
+      const existing = prev.find((c) => c.productId === item.productId);
       if (existing) {
-        if (existing.quantity >= balance.quantity_on_hand) {
-          toast.error(`Only ${balance.quantity_on_hand} units available`);
+        if (existing.quantity >= item.onHand) {
+          toast.error(`Only ${item.onHand} units available`);
           return prev;
         }
         return prev.map((c) =>
-          c.productId === balance.product_id
+          c.productId === item.productId
             ? { ...c, quantity: c.quantity + 1 }
             : c,
         );
       }
-      // unitPrice is read at create time from the DB; we still cache it
-      // here for the cart total preview. The server recomputes from DB.
       return [
         ...prev,
         {
-          productId: balance.product_id,
-          name: balance.product_name,
-          unitPrice: 0,
-          onHand: balance.quantity_on_hand,
+          productId: item.productId,
+          name: item.name,
+          unitPrice: item.unitPrice,
+          onHand: item.onHand,
           quantity: 1,
+          kind: item.kind,
+          defaultServiceKind: item.defaultServiceKind,
         },
       ];
     });
+
+    // Auto-open the attach dialog for service items so the operator does not
+    // have to hunt for a small button. The dialog can be dismissed and filled
+    // later from admin/orders if needed.
+    if (item.kind === "service") {
+      openServiceDialog(item.productId);
+    }
   };
 
   const handleQuantityChange = (productId: number, delta: number) => {
@@ -286,10 +370,14 @@ export default function POSPage() {
     setCart((prev) => prev.filter((c) => c.productId !== productId));
 
   const openServiceDialog = (productId: number) => {
-    const existing = cart.find((c) => c.productId === productId)?.service;
+    const cartItem = cart.find((c) => c.productId === productId);
+    const catalogueItem = catalogue.find((c) => c.productId === productId);
+    const existing = cartItem?.service;
+    const fallbackKind: ServiceKind =
+      catalogueItem?.defaultServiceKind ?? "tattoo";
     setServiceForm({
       staffMemberId: existing ? String(existing.staffMemberId) : "",
-      serviceKind: existing?.serviceKind ?? "tattoo",
+      serviceKind: existing?.serviceKind ?? fallbackKind,
       bodyLocation: existing?.bodyLocation ?? "",
     });
     setServiceDialogProductId(productId);
@@ -301,13 +389,16 @@ export default function POSPage() {
       toast.error("Pick a staff member");
       return;
     }
+    const staffId = Number(serviceForm.staffMemberId);
+    const staff = (staffQuery.data ?? []).find((s) => s.id === staffId);
     setCart((prev) =>
       prev.map((c) =>
         c.productId === serviceDialogProductId
           ? {
               ...c,
               service: {
-                staffMemberId: Number(serviceForm.staffMemberId),
+                staffMemberId: staffId,
+                staffDisplayName: staff?.display_name ?? `#${staffId}`,
                 serviceKind: serviceForm.serviceKind,
                 bodyLocation: serviceForm.bodyLocation.trim() || undefined,
               },
@@ -334,6 +425,11 @@ export default function POSPage() {
 
   const handleCreate = () => {
     if (!canCreate) return;
+    if (unassignedServiceCount > 0) {
+      toast.warning(
+        `Hay ${unassignedServiceCount} servicio${unassignedServiceCount === 1 ? "" : "s"} sin artista asignado. Podés completarlo desde admin/orders después.`,
+      );
+    }
     createOrderMutation.mutate({
       locationId: locationId!,
       customerId: selectedCustomerId ?? undefined,
@@ -347,6 +443,20 @@ export default function POSPage() {
       })),
     });
   };
+
+  // Keep cart pricing in sync with the catalogue once products.list resolves
+  // (the optimistic cart row stores 0 until then).
+  useEffect(() => {
+    if (catalogue.length === 0) return;
+    setCart((prev) =>
+      prev.map((c) => {
+        const fresh = catalogue.find((x) => x.productId === c.productId);
+        if (!fresh) return c;
+        if (fresh.unitPrice === c.unitPrice) return c;
+        return { ...c, unitPrice: fresh.unitPrice };
+      }),
+    );
+  }, [catalogue]);
 
   if (locationId == null) {
     return (
@@ -401,12 +511,12 @@ export default function POSPage() {
     <div className="w-full max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Catalogue (in-stock)</CardTitle>
+          <CardTitle>Catálogo</CardTitle>
           <div className="relative !mt-4">
             <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search by name or SKU"
+              placeholder="Buscar por nombre o SKU"
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
               className="pl-8"
@@ -415,34 +525,80 @@ export default function POSPage() {
         </CardHeader>
         <CardContent>
           <Combobox
-            items={filteredBalances.map((b) => ({
-              id: b.product_id,
-              name: `${b.product_name} (${b.quantity_on_hand} on hand)`,
+            items={filteredCatalogue.map((c) => ({
+              id: c.productId,
+              name:
+                c.kind === "service"
+                  ? `🪡 ${c.name} (servicio)`
+                  : `${c.name} (${c.onHand} on hand)`,
             }))}
-            placeholder="Add to cart"
+            placeholder="Agregar al carrito"
             noSelect
-            onSelect={handleAddProduct}
+            onSelect={(id) => handleAddCatalogueItem(Number(id))}
           />
-          <div className="mt-3 max-h-72 overflow-y-auto text-sm">
-            {filteredBalances.length === 0 ? (
-              <p className="text-muted-foreground">No products in stock.</p>
-            ) : (
-              <ul className="space-y-1">
-                {filteredBalances.map((b) => (
-                  <li
-                    key={b.product_id}
-                    className="flex justify-between border-b py-1"
-                  >
-                    <span>{b.product_name}</span>
-                    <Badge
-                      variant={b.quantity_on_hand > 5 ? "default" : "destructive"}
+          <div className="mt-3 max-h-80 overflow-y-auto text-sm space-y-4">
+            {groupedCatalogue.services.length > 0 ? (
+              <section>
+                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  <ScissorsIcon className="h-3.5 w-3.5" /> Servicios
+                </h3>
+                <ul className="space-y-1">
+                  {groupedCatalogue.services.map((c) => (
+                    <li
+                      key={`svc-${c.productId}`}
+                      className="flex items-center justify-between border-b py-1"
                     >
-                      {b.quantity_on_hand}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
+                      <button
+                        type="button"
+                        onClick={() => handleAddCatalogueItem(c.productId)}
+                        className="flex-1 text-left hover:text-primary"
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        {c.defaultServiceKind ? (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            · {c.defaultServiceKind}
+                          </span>
+                        ) : null}
+                      </button>
+                      <Badge variant="default">Servicio</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {groupedCatalogue.products.length > 0 ? (
+              <section>
+                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  <PackageIcon className="h-3.5 w-3.5" /> Productos
+                </h3>
+                <ul className="space-y-1">
+                  {groupedCatalogue.products.map((c) => (
+                    <li
+                      key={`prod-${c.productId}`}
+                      className="flex items-center justify-between border-b py-1"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleAddCatalogueItem(c.productId)}
+                        className="flex-1 text-left hover:text-primary"
+                      >
+                        {c.name}
+                      </button>
+                      <Badge
+                        variant={c.onHand > 5 ? "secondary" : "destructive"}
+                      >
+                        {c.onHand}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {filteredCatalogue.length === 0 ? (
+              <p className="text-muted-foreground">Nada en el catálogo.</p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -450,7 +606,7 @@ export default function POSPage() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Cart</CardTitle>
+            <CardTitle>Carrito</CardTitle>
             <div className="!mt-4">
               <Combobox
                 items={customers}
@@ -462,77 +618,130 @@ export default function POSPage() {
           <CardContent>
             {cart.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Add a product from the catalogue.
+                Agregá un ítem desde el catálogo.
               </p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Qty</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cart.map((c) => (
-                    <TableRow key={c.productId}>
-                      <TableCell>{c.name}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-7 w-7"
-                            onClick={() =>
-                              handleQuantityChange(c.productId, -1)
-                            }
-                            disabled={c.quantity <= 1}
-                          >
-                            <MinusIcon className="h-3 w-3" />
-                          </Button>
-                          <span className="w-8 text-center">{c.quantity}</span>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-7 w-7"
-                            onClick={() => handleQuantityChange(c.productId, 1)}
-                            disabled={c.quantity >= c.onHand}
-                          >
-                            <PlusIcon className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant={c.service ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => openServiceDialog(c.productId)}
-                            title={
-                              c.service
-                                ? "Service attached — click to edit"
-                                : "Attach service performer"
-                            }
-                          >
-                            <UserIcon className="h-3 w-3 mr-1" />
-                            {c.service ? "Servicio" : "+ Servicio"}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemove(c.productId)}
-                          >
-                            <Trash2Icon className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              <div className="space-y-3">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ítem</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {cart.map((c) => (
+                      <React.Fragment key={c.productId}>
+                        <TableRow>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {c.kind === "service" ? (
+                                <ScissorsIcon className="h-3.5 w-3.5 text-primary" />
+                              ) : null}
+                              <span>{c.name}</span>
+                              {c.kind === "service" ? (
+                                <Badge variant="default" className="text-[10px]">
+                                  Servicio
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  handleQuantityChange(c.productId, -1)
+                                }
+                                disabled={c.quantity <= 1}
+                              >
+                                <MinusIcon className="h-3 w-3" />
+                              </Button>
+                              <span className="w-8 text-center">
+                                {c.quantity}
+                              </span>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  handleQuantityChange(c.productId, 1)
+                                }
+                                disabled={c.quantity >= c.onHand}
+                              >
+                                <PlusIcon className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemove(c.productId)}
+                            >
+                              <Trash2Icon className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {c.kind === "service" ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="!py-1">
+                              {c.service ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openServiceDialog(c.productId)}
+                                  className="flex w-full items-center justify-between rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs hover:bg-emerald-500/15"
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <UserIcon className="h-3.5 w-3.5" />
+                                    Artista: <strong>{c.service.staffDisplayName}</strong>
+                                    <span className="text-muted-foreground">
+                                      · {c.service.serviceKind}
+                                      {c.service.bodyLocation
+                                        ? ` · ${c.service.bodyLocation}`
+                                        : ""}
+                                    </span>
+                                  </span>
+                                  <span className="text-muted-foreground underline">
+                                    editar
+                                  </span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openServiceDialog(c.productId)}
+                                  className="flex w-full items-center justify-between rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-medium hover:bg-amber-500/15"
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <UserIcon className="h-4 w-4" />
+                                    Asignar artista
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    requerido
+                                  </span>
+                                </button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </React.Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+                {unassignedServiceCount > 0 ? (
+                  <p className="text-xs text-amber-600">
+                    {unassignedServiceCount} servicio
+                    {unassignedServiceCount === 1 ? "" : "s"} sin artista
+                    asignado. Podés confirmar igual y completarlo después.
+                  </p>
+                ) : null}
+              </div>
             )}
             <p className="mt-3 text-xs text-muted-foreground">
-              Server recomputes prices from the DB at sale time.
+              El servidor recomputa precios desde la DB al confirmar.
             </p>
           </CardContent>
         </Card>
@@ -603,7 +812,7 @@ export default function POSPage() {
               {createOrderMutation.isPending ? (
                 <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Confirm sale
+              Confirmar venta
             </Button>
           </CardContent>
         </Card>
@@ -615,7 +824,7 @@ export default function POSPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Quien realizó este servicio?</DialogTitle>
+            <DialogTitle>¿Quién realizó este servicio?</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
@@ -639,7 +848,7 @@ export default function POSPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Service kind</Label>
+              <Label>Tipo de servicio</Label>
               <Select
                 value={serviceForm.serviceKind}
                 onValueChange={(v) =>
@@ -662,7 +871,7 @@ export default function POSPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Body location (optional)</Label>
+              <Label>Zona del cuerpo (opcional)</Label>
               <Input
                 value={serviceForm.bodyLocation}
                 onChange={(e) =>
@@ -679,9 +888,9 @@ export default function POSPage() {
               variant="secondary"
               onClick={() => setServiceDialogProductId(null)}
             >
-              Cancel
+              Completar después
             </Button>
-            <Button onClick={saveServiceIntent}>Save</Button>
+            <Button onClick={saveServiceIntent}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
