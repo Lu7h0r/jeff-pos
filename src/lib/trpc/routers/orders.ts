@@ -657,13 +657,16 @@ export const ordersRouter = router({
       });
     }),
 
-  update: protectedProcedure
-    .meta({ openapi: { method: "PATCH", path: "/orders/{id}", tags: ["Orders"], summary: "Update an order's legacy status" } })
+  // Closes DA-8 — the old `orders.update` allowed total_amount/status
+  // mutation with no audit trail. It is intentionally retired. The only
+  // free-text field that can be edited after a sale is `notes`; total
+  // and state changes must go through void + new sale.
+  editNotes: protectedProcedure
+    .meta({ openapi: { method: "PATCH", path: "/orders/{orderId}/notes", tags: ["Orders"], summary: "Edit notes on an existing order" } })
     .input(
       z.object({
-        id: z.number(),
-        total_amount: z.number().int().optional(),
-        status: z.enum(["completed", "pending", "cancelled"]).optional(),
+        orderId: z.number().int().positive(),
+        notes: z.string(),
       }),
     )
     .output(orderWithCustomerSchema)
@@ -671,21 +674,20 @@ export const ordersRouter = router({
       const [existing] = await db
         .select()
         .from(orders)
-        .where(eq(orders.id, input.id))
+        .where(eq(orders.id, input.orderId))
         .limit(1);
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
       }
       await assertMembership(ctx.user.id, existing.business_id);
 
-      const { id, ...data } = input;
       const [updated] = await db
         .update(orders)
-        .set(data)
-        .where(eq(orders.id, id))
+        .set({ notes: input.notes })
+        .where(eq(orders.id, existing.id))
         .returning();
 
-      const customer = updated?.customer_id
+      const customer = updated.customer_id
         ? await db.query.customers.findFirst({
             where: eq(customers.id, updated.customer_id),
             columns: { name: true },
