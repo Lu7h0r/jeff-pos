@@ -109,8 +109,8 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | DA-21 | Multi-business switcher UI no existe | baja | UX futuro | abierta |
 | DA-22 | Exclusividad broad/granular sin enforcement DB | baja | post-Postgres real | abierta |
 | DA-23 | Generacion de password hardcoded, no via Better Auth reset | media | TBD | abierta |
-| DA-24 | Archive del ultimo owner posible (lockout risk) | alta | proximo cleanup auth | abierta |
-| DA-25 | Routers de inventory/orders/dashboard no auditados con effectiveLocationIds | media | proximo audit pass | abierta |
+| DA-24 | Archive del ultimo owner posible (lockout risk) | alta | auth-cleanup | cerrada |
+| DA-25 | Routers de inventory/orders/dashboard no auditados con effectiveLocationIds | media | auth-cleanup | cerrada |
 
 ## DA-6 — `inventory_balances` sin UNIQUE compound
 
@@ -384,7 +384,7 @@ Requiere Better Auth feature de invite tokens o implementacion custom. Fuera de 
 
 Tres lineas de codigo. Alta prioridad.
 
-**Estado:** abierta. Bug critico que se manifiesta solo en escenarios de error humano. Resolver en proximo cleanup auth (15 min).
+**Estado:** cerrada. Branch `chore/auth-cleanup-da24-da25`: `team.archive` ahora corre dentro de una `db.transaction` que cuenta los owners activos del business y rechaza con CONFLICT cuando la fila a archivar es el ultimo `business_members.role='owner'` con `status='active'`. Suspended/removed owners no cuentan. La regla solo aplica a `business_members`; archive de `location_members` siempre procede. Tests `team-lockout.test.ts` cubren los 5 escenarios (no-last / last / suspended-no-vale / no-owner / cross-business).
 
 ## DA-25 — Routers no auditados con `effectiveLocationIds`
 
@@ -404,7 +404,7 @@ if (ctx.isLocationScoped && !ctx.effectiveLocationIds.includes(input.locationId)
 
 Aplicar consistentemente. ~30 min de subagente.
 
-**Estado:** abierta. Riesgo medio: la UI no expone al cashier el otro locationId (selector filtrado), pero un atacante con credenciales validas podria enviar el request manual via curl. Resolver en proximo cleanup auth junto con DA-24.
+**Estado:** cerrada. Branch `chore/auth-cleanup-da24-da25`: nuevo helper `src/lib/trpc/scope-guards.ts:assertLocationAllowed(ctx, locationId)` rechaza FORBIDDEN cuando `ctx.isLocationScoped && !ctx.effectiveLocationIds.includes(locationId)`. Aplicado en los 10 routers que reciben `locationId` (input directo o derivado de fila): `inventory` (balancesByLocation/adjust/transfer/movements), `orders` (create/get/void/editNotes + filtro de scope en `list`), `dashboard.stats` (input.locationId + scope implicito en aggregates cuando granular), `cash-sessions` (open/current/close), `expenses.entries` (create/list, scope implicito), `purchases` (create/list/receive/cancel), `services` (attachToOrderItem via order.location_id, list + scope implicito), `station-rentals` (create via workstation.location_id, list/markCompleted/cancel), `workstations` (list + scope implicito, create/update/archive via row.location_id), `locations.getActive` ya cubria via scopedLocationIds. Tests en `scope-guards.test.ts` (10 cases).
 
 ## Convencion de cierre
 
