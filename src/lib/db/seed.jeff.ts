@@ -14,6 +14,7 @@ import {
   staffMembers,
   workstations,
   stationRentals,
+  locationMembers,
 } from "./schema";
 import { auth } from "../auth";
 import { eq, and, inArray, gte } from "drizzle-orm";
@@ -22,6 +23,12 @@ const JEFF_OWNER_EMAIL = "jeff@jeff.studio";
 const JEFF_OWNER_PASSWORD = "jeff1234";
 const JEFF_OWNER_NAME = "Jeff Owner";
 const BUSINESS_SLUG = "jeff";
+
+// Sample granular cashier user — exercises the location_members path in
+// resolveActiveContext for end-to-end testing of the auth-management batch.
+const SAMPLE_CASHIER_EMAIL = "cashier@jeff.studio";
+const SAMPLE_CASHIER_PASSWORD = "cashier1234";
+const SAMPLE_CASHIER_NAME = "Sample Cashier";
 
 /**
  * Idempotent seed for the Jeff business. Safe to run multiple times.
@@ -577,6 +584,51 @@ export async function seedJeff(): Promise<void> {
     }
   }
 
+  // ── Auth Management: sample location-scoped cashier ─────────────────────
+  // Idempotent: signs up Better Auth user if missing, then attaches a single
+  // location_members row for Amparo with role=cashier (granular scope).
+  let seededCashier = 0;
+  if (amparo) {
+    let cashierUserId: string | null = null;
+    try {
+      const signUpRes = await auth.api.signUpEmail({
+        body: {
+          name: SAMPLE_CASHIER_NAME,
+          email: SAMPLE_CASHIER_EMAIL,
+          password: SAMPLE_CASHIER_PASSWORD,
+        },
+      });
+      cashierUserId = signUpRes.user.id;
+      seededCashier = 1;
+    } catch {
+      const signInRes = await auth.api.signInEmail({
+        body: {
+          email: SAMPLE_CASHIER_EMAIL,
+          password: SAMPLE_CASHIER_PASSWORD,
+        },
+      });
+      cashierUserId = signInRes.user.id;
+    }
+
+    if (cashierUserId) {
+      const existingMembership = await db
+        .select()
+        .from(locationMembers)
+        .where(eq(locationMembers.user_id, cashierUserId))
+        .limit(1);
+
+      if (existingMembership.length === 0) {
+        await db.insert(locationMembers).values({
+          business_id: businessId,
+          location_id: amparo.id,
+          user_id: cashierUserId,
+          role: "cashier",
+          status: "active",
+        });
+      }
+    }
+  }
+
   console.log(
     `Seeded Jeff: business=${BUSINESS_SLUG} (id=${businessId}), ` +
       `owner=${JEFF_OWNER_EMAIL} (password=${JEFF_OWNER_PASSWORD}), ` +
@@ -589,7 +641,8 @@ export async function seedJeff(): Promise<void> {
       `purchases=+${seededPurchase}, ` +
       `staff=+${seededStaff}, ` +
       `workstations=+${seededWorkstations}, ` +
-      `station_rentals=+${seededRental}`,
+      `station_rentals=+${seededRental}, ` +
+      `cashier=${seededCashier} (email=${SAMPLE_CASHIER_EMAIL}, password=${SAMPLE_CASHIER_PASSWORD}, scope=Amparo)`,
   );
 }
 
