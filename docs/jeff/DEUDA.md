@@ -86,10 +86,42 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | ID | Ubicacion | Severidad | Batch resolucion | Estado |
 |---|---|---|---|---|
 | DA-1 | `orders.ts:54` | alta | Batch 4 | abierta |
-| DA-2 | `orders.ts` create flow | alta | Batch 3 + Batch 4 | abierta |
+| DA-2 | `orders.ts` create flow | alta | Batch 3 (schema) + Batch 4 (descuento) | schema listo, descuento abierto |
 | DA-3 | `orders.ts:123-133` | media | Batch 4 (via void) | abierta |
 | DA-4 | `schema.ts customers` | media | Batch 1 + Batch 1.5 | mitigada (query layer) |
 | DA-5 | `schema.ts paymentMethods` | baja | Batch 1 + Batch 1.5 | cerrada (query layer) |
+| DA-6 | `schema.ts inventoryBalances` | media | post-PGlite (PostgreSQL real) | abierta |
+| DA-7 | `schema.ts products.business_id` | media | Batch 4 (backfill + NOT NULL) | abierta |
+
+## DA-6 — `inventory_balances` sin UNIQUE compound
+
+**Ubicacion:** `src/lib/db/schema.ts` tabla `inventoryBalances`. La tupla `(business_id, location_id, product_id)` deberia ser unica pero no hay UNIQUE compound a nivel DB.
+
+**Impacto:** Bajo PostgreSQL real con isolation `read-committed` (default), dos requests concurrentes que ajustan stock del mismo (location, product) y ambos miss en el SELECT inicial pueden insertar dos rows. La logica del router (`inventory.adjust`, `inventory.transfer`) usa SELECT-then-UPDATE-or-INSERT dentro de una `db.transaction`, lo cual mitiga pero NO elimina la race window.
+
+Hoy es bug latente: PGlite es single-process, no hay concurrencia real. Cuando se migre a PostgreSQL real (Riesgo 1 del PLAN.md) se manifiesta.
+
+**Resolucion:** Cuando se migre off PGlite a PostgreSQL real:
+
+1. Agregar al schema migration `UNIQUE (business_id, location_id, product_id)` index.
+2. Cambiar router a `INSERT ... ON CONFLICT DO UPDATE` para semantica atomica nativa.
+3. Optional: extender `helpers.ts:tableToDDL` para emitir compound uniques (limitacion actual del helper documentada en codigo).
+
+**Estado:** abierta. No-bloqueante mientras el deploy sea single-process PGlite. Bloqueante antes de piloto multi-PC con Postgres.
+
+## DA-7 — `products.business_id` nullable transitorio
+
+**Ubicacion:** `src/lib/db/schema.ts` tabla `products`, columna `business_id` agregada en Batch 3 como nullable.
+
+**Impacto:** Productos legacy creados por demo seed.ts (sin business) coexisten con productos del business Jeff. Batch 4 (`orders.create` atomica) va a requerir que TODA venta de producto referencie un product cuyo `business_id` matchea el business activo. Productos con `business_id NULL` no van a poder venderse, lo cual es correcto operativamente, pero el schema deberia reforzarlo.
+
+**Resolucion:** Batch 4. Pasos:
+
+1. Backfill de `products.business_id` para productos del demo: asociarlos a un business "demo" o eliminarlos del path de venta.
+2. Cambiar la columna a `NOT NULL`.
+3. Validar en `orders.create` que `product.business_id == ctx.activeBusinessId`.
+
+**Estado:** abierta. Transicional por diseno (Batch 3 dejo nullable a proposito para no romper demo seed).
 
 ## Convencion de cierre
 
