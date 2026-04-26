@@ -669,3 +669,272 @@ export const purchaseItemsRelations = relations(purchaseItems, ({ one }) => ({
     references: [products.id],
   }),
 }));
+
+// ── Staff Members (Batch 8) ─────────────────────────────────────────────────
+// People who PERFORM services. May or may not coincide with business_members
+// (the auth-level membership): some staff are external artists with no app
+// login. Allowed kind values (enforced at zod): artist, apprentice, piercer,
+// manager, external. Allowed default_split values: staff_30_house_70,
+// staff_50_house_50, staff_70_house_30, owner_direct, manual.
+// commission_rate stored as basis points (3000 = 30%).
+export const staffMembers = pgTable("staff_members", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  user_id: text("user_id").references(() => user.id),
+  display_name: varchar("display_name", { length: 255 }).notNull(),
+  kind: varchar("kind", { length: 20 }).notNull().default("artist"),
+  commission_rate: integer("commission_rate").notNull().default(0),
+  default_split: varchar("default_split", { length: 20 })
+    .notNull()
+    .default("staff_30_house_70"),
+  archived: boolean("archived").notNull().default(false),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Workstations (Batch 8) ──────────────────────────────────────────────────
+// Physical stations at a location (a tattoo bed, a piercing chair). Used by
+// station_rentals. Allowed kind values: tattoo, piercing, general
+// (informational, enforced at zod).
+export const workstations = pgTable("workstations", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  kind: varchar("kind", { length: 20 }).notNull().default("tattoo"),
+  archived: boolean("archived").notNull().default(false),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Station Rentals (Batch 8) ───────────────────────────────────────────────
+// External artists renting a station for a session/day. Generates revenue
+// (positive cash when paid via POS lifecycle) but is NOT a service sale.
+// Allowed status values (enforced at zod): scheduled, completed, cancelled.
+export const stationRentals = pgTable("station_rentals", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  workstation_id: integer("workstation_id")
+    .notNull()
+    .references(() => workstations.id),
+  staff_member_id: integer("staff_member_id")
+    .notNull()
+    .references(() => staffMembers.id),
+  cash_session_id: integer("cash_session_id").references(() => cashSessions.id),
+  payment_method_id: integer("payment_method_id").references(
+    () => paymentMethods.id,
+  ),
+  amount: integer("amount").notNull(),
+  start_at: timestamp("start_at").notNull(),
+  end_at: timestamp("end_at").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("scheduled"),
+  notes: text("notes"),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Service Sales (Batch 8) ─────────────────────────────────────────────────
+// Joins an order_item with the staff_member who performed the service. One
+// row per order_item that represents a service (tattoo/piercing/etc).
+// Allowed service_kind values (enforced at zod, adopted from studio-crm):
+// tattoo, piercing, touchup, removal, consultation, other. commission_split
+// is a snapshot of staff.default_split at sale time.
+export const serviceSales = pgTable("service_sales", {
+  id: serial("id").primaryKey(),
+  order_item_id: integer("order_item_id")
+    .notNull()
+    .references(() => orderItems.id),
+  staff_member_id: integer("staff_member_id")
+    .notNull()
+    .references(() => staffMembers.id),
+  service_kind: varchar("service_kind", { length: 30 }).notNull(),
+  body_location: varchar("body_location", { length: 100 }),
+  materials_used: text("materials_used"),
+  practitioner_notes: text("practitioner_notes"),
+  commission_split: varchar("commission_split", { length: 20 }).notNull(),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Commission Estimates (Batch 8) ──────────────────────────────────────────
+// Estimated commission per service_sale, computed at sale time but flagged as
+// `estimated` until manual liquidation. NEVER auto-generates a payout — Jeff
+// liquidates manually. Allowed status values (enforced at zod): estimated,
+// manual_pending, liquidated, voided. business_id is denormalized for reports.
+export const commissionEstimates = pgTable("commission_estimates", {
+  id: serial("id").primaryKey(),
+  service_sale_id: integer("service_sale_id")
+    .notNull()
+    .references(() => serviceSales.id),
+  staff_member_id: integer("staff_member_id")
+    .notNull()
+    .references(() => staffMembers.id),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  gross_amount: integer("gross_amount").notNull(),
+  staff_share_amount: integer("staff_share_amount").notNull(),
+  house_share_amount: integer("house_share_amount").notNull(),
+  split_kind: varchar("split_kind", { length: 20 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("estimated"),
+  liquidated_at: timestamp("liquidated_at"),
+  liquidated_by_user_id: text("liquidated_by_user_id").references(
+    () => user.id,
+  ),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Location Members (Batch 8) ──────────────────────────────────────────────
+// Granular per-location permission for staff who only operate at one sede.
+// Coexists with business_members (broader business-level membership). A user
+// can be business_members.role=cashier AND location_members.role=artist at
+// Amparo only. Allowed role values (enforced at zod): cashier, artist,
+// manager, viewer. Allowed status: active, suspended, removed.
+// resolveActiveContext intentionally still reads only business_members in
+// Batch 8; granular per-location auth is a future refinement.
+export const locationMembers = pgTable("location_members", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  user_id: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  role: varchar("role", { length: 20 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Batch 8 Relations ───────────────────────────────────────────────────────
+export const staffMembersRelations = relations(
+  staffMembers,
+  ({ one, many }) => ({
+    business: one(businesses, {
+      fields: [staffMembers.business_id],
+      references: [businesses.id],
+    }),
+    user: one(user, {
+      fields: [staffMembers.user_id],
+      references: [user.id],
+    }),
+    serviceSales: many(serviceSales),
+    commissionEstimates: many(commissionEstimates),
+    stationRentals: many(stationRentals),
+  }),
+);
+
+export const workstationsRelations = relations(
+  workstations,
+  ({ one, many }) => ({
+    business: one(businesses, {
+      fields: [workstations.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [workstations.location_id],
+      references: [locations.id],
+    }),
+    rentals: many(stationRentals),
+  }),
+);
+
+export const stationRentalsRelations = relations(stationRentals, ({ one }) => ({
+  business: one(businesses, {
+    fields: [stationRentals.business_id],
+    references: [businesses.id],
+  }),
+  location: one(locations, {
+    fields: [stationRentals.location_id],
+    references: [locations.id],
+  }),
+  workstation: one(workstations, {
+    fields: [stationRentals.workstation_id],
+    references: [workstations.id],
+  }),
+  staffMember: one(staffMembers, {
+    fields: [stationRentals.staff_member_id],
+    references: [staffMembers.id],
+  }),
+  cashSession: one(cashSessions, {
+    fields: [stationRentals.cash_session_id],
+    references: [cashSessions.id],
+  }),
+  paymentMethod: one(paymentMethods, {
+    fields: [stationRentals.payment_method_id],
+    references: [paymentMethods.id],
+  }),
+  createdBy: one(user, {
+    fields: [stationRentals.created_by_user_id],
+    references: [user.id],
+  }),
+}));
+
+export const serviceSalesRelations = relations(
+  serviceSales,
+  ({ one, many }) => ({
+    orderItem: one(orderItems, {
+      fields: [serviceSales.order_item_id],
+      references: [orderItems.id],
+    }),
+    staffMember: one(staffMembers, {
+      fields: [serviceSales.staff_member_id],
+      references: [staffMembers.id],
+    }),
+    commissionEstimates: many(commissionEstimates),
+  }),
+);
+
+export const commissionEstimatesRelations = relations(
+  commissionEstimates,
+  ({ one }) => ({
+    serviceSale: one(serviceSales, {
+      fields: [commissionEstimates.service_sale_id],
+      references: [serviceSales.id],
+    }),
+    staffMember: one(staffMembers, {
+      fields: [commissionEstimates.staff_member_id],
+      references: [staffMembers.id],
+    }),
+    business: one(businesses, {
+      fields: [commissionEstimates.business_id],
+      references: [businesses.id],
+    }),
+    liquidatedBy: one(user, {
+      fields: [commissionEstimates.liquidated_by_user_id],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const locationMembersRelations = relations(
+  locationMembers,
+  ({ one }) => ({
+    business: one(businesses, {
+      fields: [locationMembers.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [locationMembers.location_id],
+      references: [locations.id],
+    }),
+    user: one(user, {
+      fields: [locationMembers.user_id],
+      references: [user.id],
+    }),
+  }),
+);
