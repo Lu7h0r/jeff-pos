@@ -20,6 +20,10 @@ const TABLES: PgTable[] = [
   schema.orders,
   schema.orderItems,
   schema.transactions,
+  // cash_sessions references locations; cash_movements references
+  // cash_sessions and payment_methods. Keep this order FK-safe.
+  schema.cashSessions,
+  schema.cashMovements,
 ];
 
 // All identifiers are double-quoted to avoid clashes with Postgres reserved
