@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bun run db:ensure && bun run db:push && next dev",
-    "build": "bun run db:ensure && bun run db:push && next build",
+    "dev": "bun run db:ensure && bun run db:push && bun run db:seed:jeff && next dev",
+    "build": "bun run db:ensure && bun run db:push && bun run db:seed:jeff && next build",
     "start": "next start",
     "lint": "next lint",
     "db:ensure": "bun scripts/ensure-db.ts",
