@@ -10,7 +10,6 @@ const TABLES: PgTable[] = [
   schema.paymentMethods,
   schema.orders,
   schema.orderItems,
-  schema.transactions,
 ];
 
 const SQL_TYPE_MAP: Record<string, string> = {
@@ -74,7 +73,6 @@ function getRelationVerb(from: string, to: string): string {
   const verbs: Record<string, Record<string, string>> = {
     orders: { customers: "has" },
     order_items: { orders: "contains", products: "references" },
-    transactions: { orders: "generates", payment_methods: "uses" },
   };
   return verbs[from]?.[to] ?? "relates to";
 }

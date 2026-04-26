@@ -6,7 +6,6 @@ import {
   orders,
   orderItems,
   orderPayments,
-  transactions,
   businesses,
   businessMembers,
   locations,
@@ -21,14 +20,6 @@ const DEMO_PASSWORD = "test1234";
 const DEMO_NAME = "Test User";
 const DEMO_BUSINESS_SLUG = "demo";
 const DEMO_LOCATION_SLUG = "main";
-
-const EXPENSE_CATEGORIES = [
-  "rent",
-  "utilities",
-  "supplies",
-  "marketing",
-  "maintenance",
-] as const;
 
 export async function seed() {
   const existing = await db
@@ -153,7 +144,7 @@ export async function seed() {
     .values(productValues)
     .returning();
 
-  // ── Orders + Order Items + Selling Transactions ──────────────────────────
+  // ── Orders + Order Items + Order Payments ────────────────────────────────
   const orderCount = 40;
   for (let i = 0; i < orderCount; i++) {
     const customer = faker.helpers.arrayElement(insertedCustomers);
@@ -177,10 +168,10 @@ export async function seed() {
 
     const createdAt = faker.date.recent({ days: 60 });
 
-    const legacyStatus = faker.helpers.weightedArrayElement([
-      { value: "completed", weight: 8 },
+    const lifecycle = faker.helpers.weightedArrayElement([
+      { value: "complete", weight: 8 },
       { value: "pending", weight: 1.5 },
-      { value: "cancelled", weight: 0.5 },
+      { value: "void", weight: 0.5 },
     ]);
 
     const [order] = await db
@@ -192,14 +183,8 @@ export async function seed() {
         business_id: demoBusinessId,
         location_id: demoLocationId,
         cash_session_id: demoSessionId,
-        payment_status: legacyStatus === "completed" ? "paid" : "unpaid",
-        process_status:
-          legacyStatus === "completed"
-            ? "complete"
-            : legacyStatus === "cancelled"
-              ? "void"
-              : "pending",
-        status: legacyStatus,
+        payment_status: lifecycle === "complete" ? "paid" : "unpaid",
+        process_status: lifecycle,
         created_at: createdAt,
       })
       .returning();
@@ -221,7 +206,7 @@ export async function seed() {
       })),
     );
 
-    if (legacyStatus === "completed") {
+    if (lifecycle === "complete") {
       await db.insert(orderPayments).values({
         order_id: order.id,
         payment_method_id: pmId,
@@ -230,55 +215,12 @@ export async function seed() {
         created_by_user_id: userId,
         created_at: createdAt,
       });
-
-      await db.insert(transactions).values({
-        description: `Payment for order #${order.id}`,
-        order_id: order.id,
-        payment_method_id: pmId,
-        amount: totalAmount,
-        user_uid: userId,
-        type: "income",
-        category: "selling",
-        status: "completed",
-        created_at: createdAt,
-      });
     }
-  }
-
-  // ── Expense Transactions ─────────────────────────────────────────────────
-  const expenseCount = 25;
-  for (let i = 0; i < expenseCount; i++) {
-    const category = faker.helpers.arrayElement(EXPENSE_CATEGORIES);
-    const descriptions: Record<string, () => string> = {
-      rent: () => `Monthly rent — ${faker.date.month()}`,
-      utilities: () =>
-        `${faker.helpers.arrayElement(["Electricity", "Water", "Internet"])} bill`,
-      supplies: () =>
-        `${faker.helpers.arrayElement(["Office supplies", "Packaging materials", "Cleaning products"])}`,
-      marketing: () =>
-        `${faker.helpers.arrayElement(["Google Ads", "Facebook campaign", "Flyers printing", "Influencer collab"])}`,
-      maintenance: () =>
-        `${faker.helpers.arrayElement(["AC repair", "Store painting", "Equipment servicing", "Plumbing fix"])}`,
-    };
-
-    await db.insert(transactions).values({
-      description: descriptions[category](),
-      payment_method_id: faker.helpers.arrayElement(paymentMethodIds),
-      amount: faker.number.int({ min: 2000, max: 150000 }),
-      user_uid: userId,
-      type: "expense",
-      category,
-      status: faker.helpers.weightedArrayElement([
-        { value: "completed", weight: 9 },
-        { value: "pending", weight: 1 },
-      ]),
-      created_at: faker.date.recent({ days: 60 }),
-    });
   }
 
   console.log(
     `Seeded: 3 payment methods, 1 demo user (${DEMO_EMAIL} / ${DEMO_PASSWORD}), ` +
       `${customerValues.length} customers, ${productValues.length} products, ` +
-      `${orderCount} orders, ${expenseCount} expense transactions`
+      `${orderCount} orders`
   );
 }

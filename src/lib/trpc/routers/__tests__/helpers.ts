@@ -25,10 +25,8 @@ const TABLES: PgTable[] = [
   schema.orders,
   schema.orderItems,
   // order_payments references orders, payment_methods and cash_sessions —
-  // all already declared above. Lives between order_items and transactions
-  // so transactions still resolves its order_id FK.
+  // all already declared above.
   schema.orderPayments,
-  schema.transactions,
   // inventory_balances and inventory_movements both reference businesses,
   // locations and products — all already declared above. Keep this last so
   // FK targets exist when DDL is applied in order.

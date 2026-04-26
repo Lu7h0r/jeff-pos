@@ -155,13 +155,13 @@ beforeAll(async () => {
   const insertedOrders = await db
     .insert(schema.orders)
     .values([
-      { customer_id: null, total_amount: 10_000, user_uid: "u-jeff", status: "completed", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
-      { customer_id: null, total_amount: 5_000, user_uid: "u-jeff", status: "completed", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
-      { customer_id: null, total_amount: 8_000, user_uid: "u-jeff", status: "completed", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "void", voidance_reason: "test", voided_at: SALE_AT, voided_by_user_id: "u-jeff", created_at: SALE_AT },
-      { customer_id: null, total_amount: 7_000, user_uid: "u-jeff", status: "pending", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "unpaid", process_status: "pending", created_at: SALE_AT },
-      { customer_id: null, total_amount: 3_000, user_uid: "u-jeff", status: "completed", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "complete", created_at: OUT_OF_RANGE_AT },
-      { customer_id: null, total_amount: 2_000, user_uid: "u-jeff", status: "completed", business_id: bizJeffId, location_id: britaliaId, cash_session_id: britaliaOpenSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
-      { customer_id: null, total_amount: 99_000, user_uid: "u-other", status: "completed", business_id: bizOtherId, location_id: otherLocationId, cash_session_id: otherLocationSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
+      { customer_id: null, total_amount: 10_000, user_uid: "u-jeff", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
+      { customer_id: null, total_amount: 5_000, user_uid: "u-jeff", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
+      { customer_id: null, total_amount: 8_000, user_uid: "u-jeff", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "void", voidance_reason: "test", voided_at: SALE_AT, voided_by_user_id: "u-jeff", created_at: SALE_AT },
+      { customer_id: null, total_amount: 7_000, user_uid: "u-jeff", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "unpaid", process_status: "pending", created_at: SALE_AT },
+      { customer_id: null, total_amount: 3_000, user_uid: "u-jeff", business_id: bizJeffId, location_id: amparoId, cash_session_id: amparoOpenSessionId, payment_status: "paid", process_status: "complete", created_at: OUT_OF_RANGE_AT },
+      { customer_id: null, total_amount: 2_000, user_uid: "u-jeff", business_id: bizJeffId, location_id: britaliaId, cash_session_id: britaliaOpenSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
+      { customer_id: null, total_amount: 99_000, user_uid: "u-other", business_id: bizOtherId, location_id: otherLocationId, cash_session_id: otherLocationSessionId, payment_status: "paid", process_status: "complete", created_at: SALE_AT },
     ])
     .returning();
   const [a1, a2, a3, a4, a5, b1, o1] = insertedOrders;

@@ -6,7 +6,6 @@ import {
   orders,
   orderItems,
   orderPayments,
-  transactions,
   customers,
   products,
   paymentMethods,
@@ -28,7 +27,6 @@ const orderRowSchema = z.object({
   customer_id: z.number().nullable(),
   total_amount: z.number(),
   user_uid: z.string(),
-  status: z.string().nullable(),
   business_id: z.number(),
   location_id: z.number(),
   cash_session_id: z.number(),
@@ -342,7 +340,6 @@ export const ordersRouter = router({
             customer_id: input.customerId ?? null,
             total_amount: computedTotal,
             user_uid: ctx.user.id,
-            status: "completed",
             business_id: loc.business_id,
             location_id: loc.id,
             cash_session_id: openSession.id,
@@ -449,19 +446,6 @@ export const ordersRouter = router({
               openSession.expected_digital_amount + digitalAdded,
           })
           .where(eq(cashSessions.id, openSession.id));
-
-        // Legacy transactions row preserved for back-compat with the existing
-        // dashboard.stats query, which still aggregates from transactions.
-        await tx.insert(transactions).values({
-          order_id: orderRow.id,
-          payment_method_id: input.paymentLines[0].paymentMethodId,
-          amount: computedTotal,
-          user_uid: ctx.user.id,
-          status: "completed",
-          category: "selling",
-          type: "income",
-          description: `Payment for order #${orderRow.id}`,
-        });
 
         const customer = orderRow.customer_id
           ? await tx.query.customers.findFirst({

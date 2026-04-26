@@ -102,18 +102,15 @@ export const customers = pgTable("customers", {
 // ── Orders ──────────────────────────────────────────────────────────────────
 // Batch 4: orders gain business/location/cash_session scoping plus split
 // payment_status (financial) vs process_status (operational) and the void
-// trail (voidance_reason / voided_at / voided_by_user_id). The legacy
-// `status` column is kept for back-compat with dashboard/transactions
-// queries that still read it; new code uses `process_status` as the
-// source of truth. Allowed payment_status (zod): paid, unpaid,
-// partially_paid. Allowed process_status (zod): pending, ongoing,
+// trail (voidance_reason / voided_at / voided_by_user_id). `process_status`
+// is the operational source of truth. Allowed payment_status (zod): paid,
+// unpaid, partially_paid. Allowed process_status (zod): pending, ongoing,
 // complete, void.
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   customer_id: integer("customer_id").references(() => customers.id),
   total_amount: integer("total_amount").notNull(),
   user_uid: varchar("user_uid", { length: 255 }).notNull(),
-  status: varchar("status", { length: 20 }),
   business_id: integer("business_id")
     .notNull()
     .references(() => businesses.id),
@@ -163,20 +160,6 @@ export const paymentMethods = pgTable("payment_methods", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 50 }).notNull().unique(),
   business_id: integer("business_id").references(() => businesses.id),
-  created_at: timestamp("created_at").defaultNow(),
-});
-
-// ── Transactions ────────────────────────────────────────────────────────────
-export const transactions = pgTable("transactions", {
-  id: serial("id").primaryKey(),
-  description: text("description"),
-  order_id: integer("order_id").references(() => orders.id),
-  payment_method_id: integer("payment_method_id").references(() => paymentMethods.id),
-  amount: integer("amount").notNull(),
-  user_uid: varchar("user_uid", { length: 255 }).notNull(),
-  type: varchar("type", { length: 20 }),
-  category: varchar("category", { length: 100 }),
-  status: varchar("status", { length: 20 }),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -259,17 +242,6 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   }),
 }));
 
-export const transactionsRelations = relations(transactions, ({ one }) => ({
-  order: one(orders, {
-    fields: [transactions.order_id],
-    references: [orders.id],
-  }),
-  paymentMethod: one(paymentMethods, {
-    fields: [transactions.payment_method_id],
-    references: [paymentMethods.id],
-  }),
-}));
-
 export const customersRelations = relations(customers, ({ many }) => ({
   orders: many(orders),
 }));
@@ -278,8 +250,7 @@ export const productsRelations = relations(products, ({ many }) => ({
   orderItems: many(orderItems),
 }));
 
-export const paymentMethodsRelations = relations(paymentMethods, ({ one, many }) => ({
-  transactions: many(transactions),
+export const paymentMethodsRelations = relations(paymentMethods, ({ one }) => ({
   business: one(businesses, {
     fields: [paymentMethods.business_id],
     references: [businesses.id],

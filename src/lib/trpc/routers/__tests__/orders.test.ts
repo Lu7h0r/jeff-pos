@@ -687,7 +687,7 @@ describe("orders.editNotes — replaces retired orders.update (DA-8)", () => {
     expect(persisted.notes).toBe("edited via editNotes");
   });
 
-  it("does not change status, process_status, payment_status or total_amount", async () => {
+  it("does not change process_status, payment_status or total_amount", async () => {
     const order = await jeffCaller().create({
       locationId: amparoId,
       items: [{ productId: pinkProductId, quantity: 2 }],
@@ -708,7 +708,6 @@ describe("orders.editNotes — replaces retired orders.update (DA-8)", () => {
     )[0];
 
     expect(afterRow.total_amount).toBe(beforeRow.total_amount);
-    expect(afterRow.status).toBe(beforeRow.status);
     expect(afterRow.payment_status).toBe(beforeRow.payment_status);
     expect(afterRow.process_status).toBe(beforeRow.process_status);
     expect(afterRow.business_id).toBe(beforeRow.business_id);
