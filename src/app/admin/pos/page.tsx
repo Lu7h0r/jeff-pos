@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -27,6 +28,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/utils";
 import { useTRPC } from "@/lib/trpc/client";
 import {
   useQuery,
@@ -124,6 +126,8 @@ function readLocationCookie(): number | null {
 }
 
 export default function POSPage() {
+  const t = useTranslations("pos");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const locationId = useMemo(() => readLocationCookie(), []);
@@ -169,7 +173,10 @@ export default function POSPage() {
           }),
         );
         toast.success(
-          `Order #${order.id} created — total $${(order.total_amount / 100).toFixed(2)}`,
+          t("orderCreated", {
+            id: order.id,
+            amount: formatCurrency(order.total_amount),
+          }),
         );
 
         // Post-sale service attachment. Done after orders.create succeeds so
@@ -201,9 +208,10 @@ export default function POSPage() {
             });
           } catch (e) {
             toast.error(
-              `Service attach failed for item ${intent.orderItemId}: ${
-                e instanceof Error ? e.message : "unknown error"
-              }`,
+              t("serviceAttachFailed", {
+                item: String(intent.orderItemId),
+                error: e instanceof Error ? e.message : t("unknownError"),
+              }),
             );
           }
         }
@@ -212,7 +220,7 @@ export default function POSPage() {
         setSelectedCustomerId(null);
         setPaymentLines([{ paymentMethodId: null, amount: 0 }]);
       },
-      onError: (err) => toast.error(err.message || "Failed to create order"),
+      onError: (err) => toast.error(err.message || t("createOrderError")),
     }),
   );
 
@@ -233,6 +241,8 @@ export default function POSPage() {
     serviceKind: ServiceKind;
     bodyLocation: string;
   }>({ staffMemberId: "", serviceKind: "tattoo", bodyLocation: "" });
+
+  const tServiceKind = (k: ServiceKind) => t(`serviceKinds.${k}`);
 
   // Catalogue assembly: physical products from inventory_balances joined with
   // services from products.list. Services have no on-hand so we plug
@@ -313,14 +323,14 @@ export default function POSPage() {
     const item = catalogue.find((c) => c.productId === productId);
     if (!item) return;
     if (item.onHand <= 0) {
-      toast.error(`${item.name} is out of stock`);
+      toast.error(t("outOfStock", { name: item.name }));
       return;
     }
     setCart((prev) => {
       const existing = prev.find((c) => c.productId === item.productId);
       if (existing) {
         if (existing.quantity >= item.onHand) {
-          toast.error(`Only ${item.onHand} units available`);
+          toast.error(t("onlyAvailable", { count: item.onHand }));
           return prev;
         }
         return prev.map((c) =>
@@ -358,7 +368,7 @@ export default function POSPage() {
         const next = c.quantity + delta;
         if (next <= 0) return c;
         if (next > c.onHand) {
-          toast.error(`Only ${c.onHand} units available`);
+          toast.error(t("onlyAvailable", { count: c.onHand }));
           return c;
         }
         return { ...c, quantity: next };
@@ -386,7 +396,7 @@ export default function POSPage() {
   const saveServiceIntent = () => {
     if (serviceDialogProductId == null) return;
     if (!serviceForm.staffMemberId) {
-      toast.error("Pick a staff member");
+      toast.error(t("pickStaff"));
       return;
     }
     const staffId = Number(serviceForm.staffMemberId);
@@ -426,9 +436,7 @@ export default function POSPage() {
   const handleCreate = () => {
     if (!canCreate) return;
     if (unassignedServiceCount > 0) {
-      toast.warning(
-        `Hay ${unassignedServiceCount} servicio${unassignedServiceCount === 1 ? "" : "s"} sin artista asignado. Podés completarlo desde admin/orders después.`,
-      );
+      toast.warning(t("unassignedToast", { count: unassignedServiceCount }));
     }
     createOrderMutation.mutate({
       locationId: locationId!,
@@ -462,13 +470,10 @@ export default function POSPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>POS unavailable</CardTitle>
+          <CardTitle>{t("unavailableTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            No active location. Pick a location in the top bar before opening
-            the POS.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("unavailableHint")}</p>
         </CardContent>
       </Card>
     );
@@ -486,18 +491,15 @@ export default function POSPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>No open cash session</CardTitle>
+          <CardTitle>{t("noSessionTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            You cannot create a sale without an open cash session at this
-            location. Open one in the cashier page first.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("noSessionHint")}</p>
           <Link
             href="/admin/cashier"
             className="inline-flex items-center text-primary underline"
           >
-            Go to cashier
+            {t("goToCashier")}
           </Link>
         </CardContent>
       </Card>
@@ -511,12 +513,12 @@ export default function POSPage() {
     <div className="w-full max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
         <CardHeader>
-          <CardTitle>Catálogo</CardTitle>
+          <CardTitle>{t("catalogue")}</CardTitle>
           <div className="relative !mt-4">
             <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Buscar por nombre o SKU"
+              placeholder={t("searchPlaceholder")}
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
               className="pl-8"
@@ -529,10 +531,10 @@ export default function POSPage() {
               id: c.productId,
               name:
                 c.kind === "service"
-                  ? `🪡 ${c.name} (servicio)`
-                  : `${c.name} (${c.onHand} on hand)`,
+                  ? `🪡 ${c.name} ${t("serviceBadgeInline")}`
+                  : `${c.name} (${c.onHand})`,
             }))}
-            placeholder="Agregar al carrito"
+            placeholder={t("addToCart")}
             noSelect
             onSelect={(id) => handleAddCatalogueItem(Number(id))}
           />
@@ -540,7 +542,7 @@ export default function POSPage() {
             {groupedCatalogue.services.length > 0 ? (
               <section>
                 <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  <ScissorsIcon className="h-3.5 w-3.5" /> Servicios
+                  <ScissorsIcon className="h-3.5 w-3.5" /> {t("services")}
                 </h3>
                 <ul className="space-y-1">
                   {groupedCatalogue.services.map((c) => (
@@ -556,11 +558,11 @@ export default function POSPage() {
                         <span className="font-medium">{c.name}</span>
                         {c.defaultServiceKind ? (
                           <span className="text-xs text-muted-foreground ml-2">
-                            · {c.defaultServiceKind}
+                            · {tServiceKind(c.defaultServiceKind)}
                           </span>
                         ) : null}
                       </button>
-                      <Badge variant="default">Servicio</Badge>
+                      <Badge variant="default">{t("serviceBadge")}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -570,7 +572,7 @@ export default function POSPage() {
             {groupedCatalogue.products.length > 0 ? (
               <section>
                 <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  <PackageIcon className="h-3.5 w-3.5" /> Productos
+                  <PackageIcon className="h-3.5 w-3.5" /> {t("products")}
                 </h3>
                 <ul className="space-y-1">
                   {groupedCatalogue.products.map((c) => (
@@ -597,7 +599,7 @@ export default function POSPage() {
             ) : null}
 
             {filteredCatalogue.length === 0 ? (
-              <p className="text-muted-foreground">Nada en el catálogo.</p>
+              <p className="text-muted-foreground">{t("emptyCatalogue")}</p>
             ) : null}
           </div>
         </CardContent>
@@ -606,27 +608,25 @@ export default function POSPage() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Carrito</CardTitle>
+            <CardTitle>{t("cart")}</CardTitle>
             <div className="!mt-4">
               <Combobox
                 items={customers}
-                placeholder="Walk-in (no customer)"
+                placeholder={t("walkIn")}
                 onSelect={(id) => setSelectedCustomerId(Number(id))}
               />
             </div>
           </CardHeader>
           <CardContent>
             {cart.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Agregá un ítem desde el catálogo.
-              </p>
+              <p className="text-sm text-muted-foreground">{t("emptyCart")}</p>
             ) : (
               <div className="space-y-3">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Ítem</TableHead>
-                      <TableHead>Qty</TableHead>
+                      <TableHead>{t("item")}</TableHead>
+                      <TableHead>{tc("qty")}</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -642,7 +642,7 @@ export default function POSPage() {
                               <span>{c.name}</span>
                               {c.kind === "service" ? (
                                 <Badge variant="default" className="text-[10px]">
-                                  Servicio
+                                  {t("serviceBadge")}
                                 </Badge>
                               ) : null}
                             </div>
@@ -697,16 +697,17 @@ export default function POSPage() {
                                 >
                                   <span className="flex items-center gap-2">
                                     <UserIcon className="h-3.5 w-3.5" />
-                                    Artista: <strong>{c.service.staffDisplayName}</strong>
+                                    {t("artistLabel")}{" "}
+                                    <strong>{c.service.staffDisplayName}</strong>
                                     <span className="text-muted-foreground">
-                                      · {c.service.serviceKind}
+                                      · {tServiceKind(c.service.serviceKind)}
                                       {c.service.bodyLocation
                                         ? ` · ${c.service.bodyLocation}`
                                         : ""}
                                     </span>
                                   </span>
                                   <span className="text-muted-foreground underline">
-                                    editar
+                                    {t("editArtist")}
                                   </span>
                                 </button>
                               ) : (
@@ -717,10 +718,10 @@ export default function POSPage() {
                                 >
                                   <span className="flex items-center gap-2">
                                     <UserIcon className="h-4 w-4" />
-                                    Asignar artista
+                                    {t("assignArtist")}
                                   </span>
                                   <span className="text-muted-foreground">
-                                    requerido
+                                    {tc("required")}
                                   </span>
                                 </button>
                               )}
@@ -733,24 +734,22 @@ export default function POSPage() {
                 </Table>
                 {unassignedServiceCount > 0 ? (
                   <p className="text-xs text-amber-600">
-                    {unassignedServiceCount} servicio
-                    {unassignedServiceCount === 1 ? "" : "s"} sin artista
-                    asignado. Podés confirmar igual y completarlo después.
+                    {t("unassignedHint", { count: unassignedServiceCount })}
                   </p>
                 ) : null}
               </div>
             )}
             <p className="mt-3 text-xs text-muted-foreground">
-              El servidor recomputa precios desde la DB al confirmar.
+              {t("pricesNote")}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Payment</CardTitle>
+            <CardTitle>{t("payment")}</CardTitle>
             <p className="text-xs text-muted-foreground !mt-2">
-              Sum of payments must match the cart total before confirming.
+              {t("paymentNote")}
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -759,7 +758,7 @@ export default function POSPage() {
                 <div className="flex-1">
                   <Combobox
                     items={paymentMethods}
-                    placeholder="Method"
+                    placeholder={t("paymentMethod")}
                     onSelect={(id) =>
                       updatePaymentLine(index, {
                         paymentMethodId: Number(id),
@@ -791,16 +790,16 @@ export default function POSPage() {
               </div>
             ))}
             <Button variant="outline" size="sm" onClick={addPaymentLine}>
-              <PlusIcon className="h-3 w-3 mr-1" /> Add payment method
+              <PlusIcon className="h-3 w-3 mr-1" /> {t("addPaymentMethod")}
             </Button>
             <div className="border-t pt-3 flex items-center justify-between">
-              <span className="text-sm">Cart total</span>
-              <strong>${(total / 100).toFixed(2)}</strong>
+              <span className="text-sm">{t("cartTotal")}</span>
+              <strong>{formatCurrency(total)}</strong>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm">Payments total</span>
+              <span className="text-sm">{t("paymentsTotal")}</span>
               <strong className={paymentsMatch ? "" : "text-destructive"}>
-                ${(paymentsTotal / 100).toFixed(2)}
+                {formatCurrency(paymentsTotal)}
               </strong>
             </div>
             <Button
@@ -812,7 +811,7 @@ export default function POSPage() {
               {createOrderMutation.isPending ? (
                 <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Confirmar venta
+              {t("confirmSale")}
             </Button>
           </CardContent>
         </Card>
@@ -824,11 +823,11 @@ export default function POSPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>¿Quién realizó este servicio?</DialogTitle>
+            <DialogTitle>{t("serviceDialogTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
-              <Label>Staff</Label>
+              <Label>{t("staff")}</Label>
               <Select
                 value={serviceForm.staffMemberId}
                 onValueChange={(v) =>
@@ -836,7 +835,7 @@ export default function POSPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a staff member" />
+                  <SelectValue placeholder={t("pickStaffMember")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(staffQuery.data ?? []).map((s) => (
@@ -848,7 +847,7 @@ export default function POSPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Tipo de servicio</Label>
+              <Label>{t("serviceKindLabel")}</Label>
               <Select
                 value={serviceForm.serviceKind}
                 onValueChange={(v) =>
@@ -864,14 +863,14 @@ export default function POSPage() {
                 <SelectContent>
                   {SERVICE_KINDS.map((k) => (
                     <SelectItem key={k} value={k}>
-                      {k}
+                      {tServiceKind(k)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Zona del cuerpo (opcional)</Label>
+              <Label>{t("bodyLocationLabel")}</Label>
               <Input
                 value={serviceForm.bodyLocation}
                 onChange={(e) =>
@@ -888,9 +887,9 @@ export default function POSPage() {
               variant="secondary"
               onClick={() => setServiceDialogProductId(null)}
             >
-              Completar después
+              {t("completeLater")}
             </Button>
-            <Button onClick={saveServiceIntent}>Guardar</Button>
+            <Button onClick={saveServiceIntent}>{t("save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Card,
   CardHeader,
@@ -31,8 +32,6 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { useTRPC } from "@/lib/trpc/client";
 import { useQuery } from "@tanstack/react-query";
-
-const ACTIVE_LOCATION_COOKIE = "jeff_active_location_id";
 
 type RangePreset = "today" | "week" | "month" | "custom";
 
@@ -83,16 +82,9 @@ function presetRange(preset: RangePreset): { from: Date; to: Date } {
   }
 }
 
-const STATUS_PILL: Record<
-  "open" | "closed" | "none",
-  { label: string; variant: Parameters<typeof Badge>[0]["variant"] }
-> = {
-  open: { label: "Caja abierta", variant: "income" },
-  closed: { label: "Caja cerrada", variant: "secondary" },
-  none: { label: "Sin caja", variant: "destructive" },
-};
-
 export default function DashboardPage() {
+  const t = useTranslations("dashboard");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
 
   const { data: locations } = useQuery(trpc.locations.list.queryOptions());
@@ -138,6 +130,14 @@ export default function DashboardPage() {
     return <DashboardSkeleton />;
   }
 
+  const STATUS_PILL: Record<
+    "open" | "closed" | "none",
+    { label: string; variant: Parameters<typeof Badge>[0]["variant"] }
+  > = {
+    open: { label: t("cashOpen"), variant: "income" },
+    closed: { label: t("cashClosed"), variant: "secondary" },
+    none: { label: t("noCash"), variant: "destructive" },
+  };
   const pill = STATUS_PILL[data.cashSession.status];
 
   return (
@@ -148,7 +148,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MapPinIcon className="h-4 w-4" />
-              <span>{activeLocationName ?? "Todos los locales"}</span>
+              <span>{activeLocationName ?? t("allLocations")}</span>
             </div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold">{data.business.name}</h1>
@@ -171,7 +171,7 @@ export default function DashboardPage() {
             />
             {data.cashSession.status === "none" && activeLocationId != null && (
               <Button asChild size="sm">
-                <a href="/admin/cashier">Abrir caja</a>
+                <a href="/admin/cashier">{t("openCash")}</a>
               </Button>
             )}
           </div>
@@ -182,28 +182,28 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           icon={<DollarSignIcon className="h-4 w-4" />}
-          title="Ventas (revenue)"
+          title={t("kpiSalesRevenue")}
           value={formatCurrency(data.sales.todayRevenue)}
-          hint={`${data.sales.todayCount} órdenes completadas`}
+          hint={t("kpiSalesRevenueHint", { count: data.sales.todayCount })}
         />
         <Kpi
           icon={<HashIcon className="h-4 w-4" />}
-          title="Cantidad de ventas"
+          title={t("kpiSalesCount")}
           value={String(data.sales.todayCount)}
-          hint="Solo process_status=complete"
+          hint={t("kpiSalesCountHint")}
         />
         <Kpi
           icon={<BanIcon className="h-4 w-4" />}
-          title="Anuladas (revenue)"
+          title={t("kpiVoidedRevenue")}
           value={formatCurrency(data.sales.voidedRevenue)}
-          hint={`${data.sales.voidedCount} órdenes anuladas`}
+          hint={t("kpiVoidedRevenueHint", { count: data.sales.voidedCount })}
           tone="warn"
         />
         <Kpi
           icon={<HashIcon className="h-4 w-4" />}
-          title="Cantidad de anuladas"
+          title={t("kpiVoidedCount")}
           value={String(data.sales.voidedCount)}
-          hint="process_status=void"
+          hint={t("kpiVoidedCountHint")}
           tone="warn"
         />
       </div>
@@ -212,23 +212,23 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Kpi
           icon={<WalletIcon className="h-4 w-4" />}
-          title="Efectivo esperado"
+          title={t("kpiExpectedCash")}
           value={formatCurrency(data.cashSession.expectedCash)}
           hint={
             data.cashSession.status === "none"
-              ? "Seleccioná un local para ver el detalle"
-              : "Caja del turno actual"
+              ? t("kpiExpectedCashHintNoSession")
+              : t("kpiExpectedCashHintActive")
           }
         />
         <Kpi
           icon={<WalletIcon className="h-4 w-4" />}
-          title="Digital esperado"
+          title={t("kpiExpectedDigital")}
           value={formatCurrency(data.cashSession.expectedDigital)}
-          hint="Transferencias / tarjeta"
+          hint={t("kpiExpectedDigitalHint")}
         />
         <Kpi
           icon={<WalletIcon className="h-4 w-4" />}
-          title="Diferencia (al cierre)"
+          title={t("kpiDifference")}
           value={
             data.cashSession.difference == null
               ? "—"
@@ -236,8 +236,8 @@ export default function DashboardPage() {
           }
           hint={
             data.cashSession.status === "closed"
-              ? "Contado − Esperado"
-              : "Disponible al cerrar caja"
+              ? t("kpiDifferenceHintClosed")
+              : t("kpiDifferenceHintOpen")
           }
           tone={
             data.cashSession.difference == null
@@ -253,20 +253,18 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2 min-w-0">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>Ventas por método de pago</CardTitle>
-            <CardDescription>
-              Solo órdenes completadas dentro del rango.
-            </CardDescription>
+            <CardTitle>{t("salesByMethod")}</CardTitle>
+            <CardDescription>{t("salesByMethodSubtitle")}</CardDescription>
           </CardHeader>
           <CardContent>
             {data.sales.byPaymentMethod.length === 0 ? (
-              <EmptyMessage message="Sin pagos registrados en el rango." />
+              <EmptyMessage message={t("salesByMethodEmpty")} />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Método</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead>{t("method")}</TableHead>
+                    <TableHead className="text-right">{tc("total")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -288,11 +286,8 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Stock bajo</CardTitle>
-                <CardDescription>
-                  Productos con menos de 5 unidades en cualquier local del
-                  negocio.
-                </CardDescription>
+                <CardTitle>{t("lowStock")}</CardTitle>
+                <CardDescription>{t("lowStockSubtitle")}</CardDescription>
               </div>
               {data.inventory.lowStockCount > 0 && (
                 <Badge variant="destructive" className="gap-1">
@@ -304,30 +299,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {data.inventory.lowStock.length === 0 ? (
-              <EmptyMessage message="Sin alertas. Stock saludable." />
+              <EmptyMessage message={t("lowStockEmpty")} />
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead>Local</TableHead>
-                    <TableHead className="text-right">Quedan</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.inventory.lowStock.map((row) => (
-                    <TableRow key={`${row.productId}-${row.locationId}`}>
-                      <TableCell>{row.productName}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {row.locationName}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-red-600">
-                        {row.quantityOnHand}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <LowStockTable rows={data.inventory.lowStock} />
             )}
           </CardContent>
         </Card>
@@ -336,13 +310,46 @@ export default function DashboardPage() {
       <Card>
         <CardContent className="p-4 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">
-            Gastos del mes:
+            {t("monthExpenses")}
           </span>{" "}
           {formatCurrency(data.expensesPlaceholder.monthTotal)} —{" "}
           {data.expensesPlaceholder.note}
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function LowStockTable({
+  rows,
+}: {
+  rows: { productId: number; productName: string; locationId: number; locationName: string; quantityOnHand: number }[];
+}) {
+  const t = useTranslations("dashboard");
+  const tc = useTranslations("common");
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{t("product")}</TableHead>
+          <TableHead>{tc("location")}</TableHead>
+          <TableHead className="text-right">{t("remaining")}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={`${row.productId}-${row.locationId}`}>
+            <TableCell>{row.productName}</TableCell>
+            <TableCell className="text-muted-foreground">
+              {row.locationName}
+            </TableCell>
+            <TableCell className="text-right font-semibold text-red-600">
+              {row.quantityOnHand}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -382,10 +389,11 @@ function RangePresetButtons({
   active: RangePreset;
   onChange: (p: RangePreset) => void;
 }) {
+  const t = useTranslations("dashboard");
   const items: { id: RangePreset; label: string }[] = [
-    { id: "today", label: "Hoy" },
-    { id: "week", label: "Semana" },
-    { id: "month", label: "Mes" },
+    { id: "today", label: t("rangeToday") },
+    { id: "week", label: t("rangeWeek") },
+    { id: "month", label: t("rangeMonth") },
   ];
   return (
     <div className="inline-flex rounded-md border bg-background p-0.5">

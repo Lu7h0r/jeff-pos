@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   Card,
   CardHeader,
@@ -17,21 +18,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useTRPC } from "@/lib/trpc/client";
 import { useCrudMutation } from "@/hooks/use-crud-mutation";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import type { RouterOutputs } from "@/lib/trpc/router";
 
 type CashSession = NonNullable<RouterOutputs["cashSessions"]["current"]>;
-
-const ACTIVE_LOCATION_COOKIE = "jeff_active_location_id";
 
 function readActiveLocationCookie(): number | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(/jeff_active_location_id=(\d+)/);
   return match ? Number(match[1]) : null;
-}
-
-function formatAmount(minorUnits: number): string {
-  return `$${(minorUnits / 100).toFixed(2)}`;
 }
 
 export default function CashierPage() {
@@ -49,16 +44,16 @@ export default function CashierPage() {
 }
 
 function NoLocationSelected() {
+  const t = useTranslations("cashier");
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Caja</CardTitle>
-        <CardDescription>Select a location to operate the cash drawer.</CardDescription>
+        <CardTitle>{t("title")}</CardTitle>
+        <CardDescription>{t("selectLocation")}</CardDescription>
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground">
-          No active location is set. Use the location selector in the header to
-          pick Amparo or Britalia first.
+          {t("noLocationDetail")}
         </p>
       </CardContent>
     </Card>
@@ -102,6 +97,8 @@ interface OpenSessionFormProps {
 }
 
 function OpenSessionForm({ locationId, onOpened }: OpenSessionFormProps) {
+  const t = useTranslations("cashier");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const [openingAmount, setOpeningAmount] = useState<string>("0");
   const [notes, setNotes] = useState<string>("");
@@ -109,8 +106,8 @@ function OpenSessionForm({ locationId, onOpened }: OpenSessionFormProps) {
   const openMutation = useCrudMutation({
     mutationOptions: trpc.cashSessions.open.mutationOptions(),
     invalidateKeys: trpc.cashSessions.current.queryOptions({ locationId }).queryKey,
-    successMessage: "Cash session opened",
-    errorMessage: "Failed to open cash session",
+    successMessage: t("openSessionSuccess"),
+    errorMessage: t("openSessionError"),
     onSuccess: () => {
       setOpeningAmount("0");
       setNotes("");
@@ -133,16 +130,13 @@ function OpenSessionForm({ locationId, onOpened }: OpenSessionFormProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Open cash drawer</CardTitle>
-        <CardDescription>
-          Start a new cash session for this location. The opening amount is the
-          cash physically in the drawer right now.
-        </CardDescription>
+        <CardTitle>{t("openTitle")}</CardTitle>
+        <CardDescription>{t("openSubtitle")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form className="grid gap-4 max-w-md" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <Label htmlFor="opening-amount">Opening cash</Label>
+            <Label htmlFor="opening-amount">{t("openingCash")}</Label>
             <Input
               id="opening-amount"
               type="number"
@@ -154,19 +148,19 @@ function OpenSessionForm({ locationId, onOpened }: OpenSessionFormProps) {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="opening-notes">Notes (optional)</Label>
+            <Label htmlFor="opening-notes">{tc("notesOptional")}</Label>
             <Input
               id="opening-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Shift, opener, anything worth recording"
+              placeholder={t("openingNotesPlaceholder")}
             />
           </div>
           <Button type="submit" disabled={openMutation.isPending}>
             {openMutation.isPending ? (
               <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
             ) : null}
-            Open session
+            {t("openSession")}
           </Button>
         </form>
       </CardContent>
@@ -180,6 +174,8 @@ interface OpenSessionViewProps {
 }
 
 function OpenSessionView({ session, onClosed }: OpenSessionViewProps) {
+  const t = useTranslations("cashier");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const [countedAmount, setCountedAmount] = useState<string>("0");
   const [notes, setNotes] = useState<string>("");
@@ -189,8 +185,8 @@ function OpenSessionView({ session, onClosed }: OpenSessionViewProps) {
     invalidateKeys: trpc.cashSessions.current.queryOptions({
       locationId: session.location_id,
     }).queryKey,
-    successMessage: "Cash session closed",
-    errorMessage: "Failed to close cash session",
+    successMessage: t("closeSessionSuccess"),
+    errorMessage: t("closeSessionError"),
     onSuccess: () => {
       setCountedAmount("0");
       setNotes("");
@@ -216,27 +212,30 @@ function OpenSessionView({ session, onClosed }: OpenSessionViewProps) {
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <CardTitle>Open cash session</CardTitle>
+              <CardTitle>{t("openSessionTitle")}</CardTitle>
               <CardDescription>
-                Opened {session.opened_at ? formatDate(session.opened_at) : "—"} by {session.opened_by_user_id}
+                {t("openedAt", {
+                  date: session.opened_at ? formatDate(session.opened_at) : "—",
+                  user: String(session.opened_by_user_id),
+                })}
               </CardDescription>
             </div>
-            <Badge>open</Badge>
+            <Badge>{tc("open")}</Badge>
           </div>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <dt className="text-muted-foreground">Opening cash</dt>
-              <dd className="font-medium">{formatAmount(session.opening_cash_amount)}</dd>
+              <dt className="text-muted-foreground">{t("openingCash")}</dt>
+              <dd className="font-medium">{formatCurrency(session.opening_cash_amount)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Expected cash</dt>
-              <dd className="font-medium">{formatAmount(session.expected_cash_amount)}</dd>
+              <dt className="text-muted-foreground">{t("expectedCash")}</dt>
+              <dd className="font-medium">{formatCurrency(session.expected_cash_amount)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Expected digital</dt>
-              <dd className="font-medium">{formatAmount(session.expected_digital_amount)}</dd>
+              <dt className="text-muted-foreground">{t("expectedDigital")}</dt>
+              <dd className="font-medium">{formatCurrency(session.expected_digital_amount)}</dd>
             </div>
           </dl>
           {session.notes ? (
@@ -249,16 +248,13 @@ function OpenSessionView({ session, onClosed }: OpenSessionViewProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Close session</CardTitle>
-          <CardDescription>
-            Count the cash physically in the drawer. The difference will be
-            stored for auditing; closing does not modify any sale.
-          </CardDescription>
+          <CardTitle>{t("closeTitle")}</CardTitle>
+          <CardDescription>{t("closeSubtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 max-w-md" onSubmit={handleClose}>
             <div className="grid gap-2">
-              <Label htmlFor="counted-amount">Counted cash</Label>
+              <Label htmlFor="counted-amount">{t("countedCash")}</Label>
               <Input
                 id="counted-amount"
                 type="number"
@@ -270,19 +266,19 @@ function OpenSessionView({ session, onClosed }: OpenSessionViewProps) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="closing-notes">Notes (optional)</Label>
+              <Label htmlFor="closing-notes">{tc("notesOptional")}</Label>
               <Input
                 id="closing-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Discrepancies, observations"
+                placeholder={t("closeNotesPlaceholder")}
               />
             </div>
             <Button type="submit" variant="destructive" disabled={closeMutation.isPending}>
               {closeMutation.isPending ? (
                 <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              Close session
+              {t("closeSession")}
             </Button>
           </form>
         </CardContent>
@@ -290,16 +286,11 @@ function OpenSessionView({ session, onClosed }: OpenSessionViewProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Cash movements</CardTitle>
-          <CardDescription>
-            Sales, refunds and manual movements appear here. The movements
-            ledger is wired to POS in Batch 4; this section is currently empty.
-          </CardDescription>
+          <CardTitle>{t("movementsTitle")}</CardTitle>
+          <CardDescription>{t("movementsSubtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            No movements recorded for this session yet.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("movementsEmpty")}</p>
         </CardContent>
       </Card>
     </div>
