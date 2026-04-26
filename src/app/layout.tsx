@@ -17,8 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    // suppressHydrationWarning on <html> and <body> silences the noisy
+    // "tree hydrated but some attributes didn't match" error caused by
+    // browser extensions (password managers, privacy plugins) that inject
+    // attributes like __processed_* or bis_register into <body> before
+    // React hydrates. Only suppresses warnings on these two roots, not
+    // on app components.
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         <TRPCReactProvider>
           <main>{children}</main>
           <Toaster richColors position="bottom-right" />
