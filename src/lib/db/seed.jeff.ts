@@ -6,9 +6,14 @@ import {
   products,
   inventoryBalances,
   inventoryMovements,
+  expenseCategories,
+  expenseEntries,
+  suppliers,
+  purchaseOrders,
+  purchaseItems,
 } from "./schema";
 import { auth } from "../auth";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, gte } from "drizzle-orm";
 
 const JEFF_OWNER_EMAIL = "jeff@jeff.studio";
 const JEFF_OWNER_PASSWORD = "jeff1234";
@@ -210,12 +215,228 @@ export async function seedJeff(): Promise<void> {
     }
   }
 
+  // ── Batch 6: expense categories + sample entries + supplier + purchase ────
+  // Idempotent: categories matched by (business_id, name); supplier by
+  // (business_id, name); expense entries by description; purchase by notes.
+  const categorySeed = [
+    { name: "Arriendo", kind: "recurring" as const },
+    { name: "Servicios", kind: "recurring" as const },
+    { name: "Insumos", kind: "operational" as const },
+    { name: "Marketing", kind: "operational" as const },
+  ];
+
+  const existingCats = await db
+    .select()
+    .from(expenseCategories)
+    .where(eq(expenseCategories.business_id, businessId));
+  const existingCatByName = new Map(existingCats.map((c) => [c.name, c]));
+
+  let seededCategories = 0;
+  for (const cat of categorySeed) {
+    if (existingCatByName.has(cat.name)) continue;
+    const [created] = await db
+      .insert(expenseCategories)
+      .values({ business_id: businessId, name: cat.name, kind: cat.kind })
+      .returning();
+    existingCatByName.set(created.name, created);
+    seededCategories += 1;
+  }
+
+  let seededSupplier = 0;
+  const SUPPLIER_NAME = "Distribuidora Demo";
+  const [existingSupplier] = await db
+    .select()
+    .from(suppliers)
+    .where(
+      and(
+        eq(suppliers.business_id, businessId),
+        eq(suppliers.name, SUPPLIER_NAME),
+      ),
+    )
+    .limit(1);
+
+  let supplierId: number;
+  if (existingSupplier) {
+    supplierId = existingSupplier.id;
+  } else {
+    const [created] = await db
+      .insert(suppliers)
+      .values({
+        business_id: businessId,
+        name: SUPPLIER_NAME,
+        contact_email: "ventas@distri.demo",
+        contact_phone: "+57 300 000 0000",
+      })
+      .returning();
+    supplierId = created.id;
+    seededSupplier = 1;
+  }
+
+  let seededExpenses = 0;
+  if (amparo) {
+    const expenseSeed: Array<{
+      categoryName: string;
+      amount: number;
+      description: string;
+    }> = [
+      {
+        categoryName: "Arriendo",
+        amount: 1_430_000_00,
+        description: "Arriendo Amparo (mes corriente)",
+      },
+      {
+        categoryName: "Servicios",
+        amount: 230_000_00,
+        description: "Luz Amparo (mes corriente)",
+      },
+    ];
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (const exp of expenseSeed) {
+      const cat = existingCatByName.get(exp.categoryName);
+      if (!cat) continue;
+      const existing = await db
+        .select()
+        .from(expenseEntries)
+        .where(
+          and(
+            eq(expenseEntries.business_id, businessId),
+            eq(expenseEntries.description, exp.description),
+            gte(expenseEntries.incurred_at, monthStart),
+          ),
+        )
+        .limit(1);
+      if (existing.length > 0) continue;
+
+      await db.insert(expenseEntries).values({
+        business_id: businessId,
+        location_id: amparo.id,
+        category_id: cat.id,
+        amount: exp.amount,
+        incurred_at: now,
+        description: exp.description,
+        created_by_user_id: ownerUserId,
+      });
+      seededExpenses += 1;
+    }
+  }
+
+  let seededPurchase = 0;
+  const PURCHASE_NOTE = "Sample purchase Britalia (Batch 6 seed)";
+  if (britalia) {
+    const [existingPurchase] = await db
+      .select()
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.business_id, businessId),
+          eq(purchaseOrders.notes, PURCHASE_NOTE),
+        ),
+      )
+      .limit(1);
+
+    if (!existingPurchase) {
+      const britaliaProducts = await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.business_id, businessId),
+            inArray(products.sku, ["INK-BLACK-30", "NEEDLE-3RL"]),
+          ),
+        );
+      const ink = britaliaProducts.find((p) => p.sku === "INK-BLACK-30");
+      const needle = britaliaProducts.find((p) => p.sku === "NEEDLE-3RL");
+
+      if (ink && needle) {
+        const items = [
+          { product: ink, quantity: 5, unit_cost: 18_000 },
+          { product: needle, quantity: 10, unit_cost: 22_000 },
+        ];
+        const total = items.reduce(
+          (sum, it) => sum + it.quantity * it.unit_cost,
+          0,
+        );
+
+        const [order] = await db
+          .insert(purchaseOrders)
+          .values({
+            business_id: businessId,
+            location_id: britalia.id,
+            supplier_id: supplierId,
+            status: "received",
+            total_amount: total,
+            notes: PURCHASE_NOTE,
+            created_by_user_id: ownerUserId,
+            received_at: new Date(),
+          })
+          .returning();
+
+        for (const it of items) {
+          await db.insert(purchaseItems).values({
+            purchase_order_id: order.id,
+            product_id: it.product.id,
+            quantity: it.quantity,
+            unit_cost: it.unit_cost,
+            total_cost: it.quantity * it.unit_cost,
+          });
+
+          const [bal] = await db
+            .select()
+            .from(inventoryBalances)
+            .where(
+              and(
+                eq(inventoryBalances.location_id, britalia.id),
+                eq(inventoryBalances.product_id, it.product.id),
+              ),
+            )
+            .limit(1);
+          if (bal) {
+            await db
+              .update(inventoryBalances)
+              .set({
+                quantity_on_hand: bal.quantity_on_hand + it.quantity,
+                updated_at: new Date(),
+              })
+              .where(eq(inventoryBalances.id, bal.id));
+          } else {
+            await db.insert(inventoryBalances).values({
+              business_id: businessId,
+              location_id: britalia.id,
+              product_id: it.product.id,
+              quantity_on_hand: it.quantity,
+              quantity_reserved: 0,
+            });
+          }
+
+          await db.insert(inventoryMovements).values({
+            business_id: businessId,
+            location_id: britalia.id,
+            product_id: it.product.id,
+            quantity_delta: it.quantity,
+            type: "purchase",
+            source_type: "purchase_order",
+            source_id: order.id,
+            created_by_user_id: ownerUserId,
+            notes: PURCHASE_NOTE,
+          });
+        }
+        seededPurchase = 1;
+      }
+    }
+  }
+
   console.log(
     `Seeded Jeff: business=${BUSINESS_SLUG} (id=${businessId}), ` +
       `owner=${JEFF_OWNER_EMAIL} (password=${JEFF_OWNER_PASSWORD}), ` +
       `locations=Amparo+Britalia, ` +
       `products=+${seededProducts} (total ${sampleProducts.length}), ` +
-      `balances=+${seededBalances}`,
+      `balances=+${seededBalances}, ` +
+      `expense_categories=+${seededCategories}, ` +
+      `expense_entries=+${seededExpenses}, ` +
+      `suppliers=+${seededSupplier}, ` +
+      `purchases=+${seededPurchase}`,
   );
 }
 
