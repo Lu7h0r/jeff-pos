@@ -24,6 +24,11 @@ const TABLES: PgTable[] = [
   // cash_sessions and payment_methods. Keep this order FK-safe.
   schema.cashSessions,
   schema.cashMovements,
+  // inventory_balances and inventory_movements both reference businesses,
+  // locations and products — all already declared above. Keep this last so
+  // FK targets exist when DDL is applied in order.
+  schema.inventoryBalances,
+  schema.inventoryMovements,
 ];
 
 // All identifiers are double-quoted to avoid clashes with Postgres reserved
