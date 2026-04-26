@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTRPC } from "@/lib/trpc/client";
@@ -33,14 +34,41 @@ import { SearchFilter, type FilterOption } from "@/components/ui/search-filter";
 import type { RouterOutputs } from "@/lib/trpc/router";
 
 type Product = RouterOutputs["products"]["list"][number];
+type ProductKind = "product" | "service";
+type ServiceKind =
+  | "tattoo"
+  | "piercing"
+  | "touchup"
+  | "removal"
+  | "consultation"
+  | "other";
 
-const productFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string(),
-  price: z.number().min(0, "Price must be positive"),
-  in_stock: z.number().int().min(0, "Stock must be non-negative"),
-  category: z.string(),
-});
+const SERVICE_KIND_OPTIONS: ServiceKind[] = [
+  "tattoo",
+  "piercing",
+  "touchup",
+  "removal",
+  "consultation",
+  "other",
+];
+
+const productFormSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    description: z.string(),
+    price: z.number().min(0, "Price must be positive"),
+    in_stock: z.number().int().min(0, "Stock must be non-negative"),
+    category: z.string(),
+    kind: z.enum(["product", "service"]),
+    default_service_kind: z.string(),
+  })
+  .refine(
+    (v) => v.kind !== "service" || v.default_service_kind !== "",
+    {
+      message: "Pick a service kind",
+      path: ["default_service_kind"],
+    },
+  );
 
 const categoryFilterOptions: FilterOption[] = [
   { label: "All", value: "all" },
@@ -55,8 +83,27 @@ const stockFilterOptions: FilterOption[] = [
   { label: "Out of Stock", value: "out-of-stock", variant: "danger" },
 ];
 
+const kindFilterOptions: FilterOption[] = [
+  { label: "All", value: "all" },
+  { label: "Productos", value: "product" },
+  { label: "Servicios", value: "service", variant: "success" },
+];
+
 const columns: Column<Product>[] = [
   { key: "name", header: "Product", sortable: true, className: "font-medium" },
+  {
+    key: "kind",
+    header: "Tipo",
+    sortable: true,
+    render: (row) =>
+      row.kind === "service" ? (
+        <Badge variant="default">
+          Servicio{row.default_service_kind ? ` · ${row.default_service_kind}` : ""}
+        </Badge>
+      ) : (
+        <Badge variant="secondary">Producto</Badge>
+      ),
+  },
   { key: "description", header: "Description", hideOnMobile: true },
   {
     key: "price",
@@ -70,6 +117,12 @@ const columns: Column<Product>[] = [
 
 const exportColumns: ExportColumn<Product>[] = [
   { key: "name", header: "Name", getValue: (p) => p.name },
+  { key: "kind", header: "Kind", getValue: (p) => p.kind },
+  {
+    key: "default_service_kind",
+    header: "Service Kind",
+    getValue: (p) => p.default_service_kind ?? "",
+  },
   { key: "description", header: "Description", getValue: (p) => p.description ?? "" },
   { key: "price", header: "Price", getValue: (p) => (p.price / 100).toFixed(2) },
   { key: "in_stock", header: "Stock", getValue: (p) => p.in_stock },
@@ -87,6 +140,7 @@ export default function Products() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
+  const [kindFilter, setKindFilter] = useState("all");
 
   const isEditing = editingId !== null;
   const invalidateKeys = trpc.products.list.queryOptions().queryKey;
@@ -115,12 +169,21 @@ export default function Products() {
   });
 
   const form = useForm({
-    defaultValues: { name: "", description: "", price: 0, in_stock: 0, category: "" },
+    defaultValues: {
+      name: "",
+      description: "",
+      price: 0,
+      in_stock: 0,
+      category: "",
+      kind: "product" as ProductKind,
+      default_service_kind: "",
+    },
     validators: {
       onSubmit: productFormSchema,
     },
     onSubmit: ({ value }) => {
-      const payload = {
+      const isService = value.kind === "service";
+      const basePayload = {
         name: value.name,
         description: value.description || undefined,
         price: Math.round(value.price * 100),
@@ -128,21 +191,35 @@ export default function Products() {
         category: value.category || undefined,
       };
       if (isEditing) {
-        updateMutation.mutate({ id: editingId, ...payload });
+        updateMutation.mutate({
+          id: editingId,
+          ...basePayload,
+          kind: value.kind,
+          default_service_kind: isService
+            ? (value.default_service_kind as ServiceKind)
+            : null,
+        });
       } else {
-        createMutation.mutate(payload);
+        createMutation.mutate({
+          ...basePayload,
+          kind: value.kind,
+          default_service_kind: isService
+            ? (value.default_service_kind as ServiceKind)
+            : undefined,
+        });
       }
     },
   });
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
+      if (kindFilter !== "all" && p.kind !== kindFilter) return false;
       if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
       if (stockFilter === "in-stock" && p.in_stock === 0) return false;
       if (stockFilter === "out-of-stock" && p.in_stock > 0) return false;
       return p.name.toLowerCase().includes(searchTerm.toLowerCase());
     });
-  }, [products, categoryFilter, stockFilter, searchTerm]);
+  }, [products, kindFilter, categoryFilter, stockFilter, searchTerm]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -158,6 +235,8 @@ export default function Products() {
     form.setFieldValue("price", p.price / 100);
     form.setFieldValue("in_stock", p.in_stock);
     form.setFieldValue("category", p.category ?? "");
+    form.setFieldValue("kind", p.kind);
+    form.setFieldValue("default_service_kind", p.default_service_kind ?? "");
     setIsDialogOpen(true);
   };
 
@@ -200,6 +279,7 @@ export default function Products() {
             onSearchChange={setSearchTerm}
             searchPlaceholder="Search products..."
             filters={[
+              { options: kindFilterOptions, value: kindFilter, onChange: setKindFilter },
               { options: categoryFilterOptions, value: categoryFilter, onChange: setCategoryFilter },
               { options: stockFilterOptions, value: stockFilter, onChange: setStockFilter },
             ]}
@@ -236,6 +316,60 @@ export default function Products() {
             }}
           >
             <div className="grid gap-4 py-4">
+              <form.Field name="kind">
+                {(field) => (
+                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
+                    <Label htmlFor="kind" className="sm:text-right">Tipo</Label>
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(v) => {
+                        const next = v as ProductKind;
+                        field.handleChange(next);
+                        if (next === "product") {
+                          form.setFieldValue("default_service_kind", "");
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="product">Producto</SelectItem>
+                        <SelectItem value="service">Servicio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </form.Field>
+              <form.Subscribe selector={(s) => s.values.kind}>
+                {(kind) =>
+                  kind === "service" ? (
+                    <form.Field name="default_service_kind">
+                      {(field) => (
+                        <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
+                          <Label htmlFor="default_service_kind" className="sm:text-right">Tipo de servicio</Label>
+                          <div className="col-span-3">
+                            <Select
+                              value={field.state.value}
+                              onValueChange={(v) => field.handleChange(v)}
+                            >
+                              <SelectTrigger><SelectValue placeholder="Tatuaje, piercing, ..." /></SelectTrigger>
+                              <SelectContent>
+                                {SERVICE_KIND_OPTIONS.map((sk) => (
+                                  <SelectItem key={sk} value={sk}>{sk}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {field.state.meta.errors.length > 0 ? (
+                              <p className="text-xs text-destructive mt-1">
+                                {field.state.meta.errors.map((e) => e?.message ?? e).join(", ")}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      )}
+                    </form.Field>
+                  ) : null
+                }
+              </form.Subscribe>
               <form.Field name="name">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
