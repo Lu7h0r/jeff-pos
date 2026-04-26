@@ -3,9 +3,12 @@ import {
   businesses,
   businessMembers,
   locations,
+  products,
+  inventoryBalances,
+  inventoryMovements,
 } from "./schema";
 import { auth } from "../auth";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 const JEFF_OWNER_EMAIL = "jeff@jeff.studio";
 const JEFF_OWNER_PASSWORD = "jeff1234";
@@ -105,10 +108,114 @@ export async function seedJeff(): Promise<void> {
       );
   }
 
+  // ── Sample products + initial inventory (Batch 3) ─────────────────────────
+  // Idempotent by sku within the Jeff business. For each product we seed a
+  // balance row at Amparo and Britalia plus an `initial_import` movement
+  // matching the seeded quantity_on_hand.
+  const allLocations = await db
+    .select()
+    .from(locations)
+    .where(eq(locations.business_id, businessId));
+  const amparo = allLocations.find((loc) => loc.slug === "amparo");
+  const britalia = allLocations.find((loc) => loc.slug === "britalia");
+
+  const sampleProducts: Array<{
+    sku: string;
+    name: string;
+    price: number;
+    cost: number;
+    amparoQty: number;
+    britaliaQty: number;
+  }> = [
+    { sku: "INK-BLACK-30", name: "Tinta Negra 30ml", price: 35_000, cost: 18_000, amparoQty: 25, britaliaQty: 12 },
+    { sku: "INK-RED-30", name: "Tinta Roja 30ml", price: 38_000, cost: 19_000, amparoQty: 18, britaliaQty: 10 },
+    { sku: "NEEDLE-3RL", name: "Aguja 3RL caja x20", price: 45_000, cost: 22_000, amparoQty: 30, britaliaQty: 15 },
+    { sku: "GLOVE-M", name: "Guantes nitrilo M caja x100", price: 28_000, cost: 14_000, amparoQty: 22, britaliaQty: 18 },
+    { sku: "GRIP-25MM", name: "Grip desechable 25mm", price: 12_000, cost: 5_500, amparoQty: 15, britaliaQty: 8 },
+  ];
+
+  let seededProducts = 0;
+  let seededBalances = 0;
+
+  if (amparo && britalia) {
+    const skus = sampleProducts.map((p) => p.sku);
+    const existing = await db
+      .select()
+      .from(products)
+      .where(and(eq(products.business_id, businessId), inArray(products.sku, skus)));
+    const existingBySku = new Map(existing.map((p) => [p.sku, p]));
+
+    for (const sample of sampleProducts) {
+      let productId: number;
+      const existingProduct = existingBySku.get(sample.sku);
+      if (existingProduct) {
+        productId = existingProduct.id;
+      } else {
+        const [created] = await db
+          .insert(products)
+          .values({
+            name: sample.name,
+            price: sample.price,
+            in_stock: sample.amparoQty + sample.britaliaQty,
+            user_uid: ownerUserId,
+            business_id: businessId,
+            sku: sample.sku,
+            cost_amount: sample.cost,
+            status: "active",
+          })
+          .returning();
+        productId = created.id;
+        seededProducts += 1;
+      }
+
+      for (const [loc, qty] of [
+        [amparo, sample.amparoQty] as const,
+        [britalia, sample.britaliaQty] as const,
+      ]) {
+        const [existingBalance] = await db
+          .select()
+          .from(inventoryBalances)
+          .where(
+            and(
+              eq(inventoryBalances.location_id, loc.id),
+              eq(inventoryBalances.product_id, productId),
+            ),
+          )
+          .limit(1);
+
+        if (existingBalance) continue;
+
+        await db.insert(inventoryBalances).values({
+          business_id: businessId,
+          location_id: loc.id,
+          product_id: productId,
+          quantity_on_hand: qty,
+          quantity_reserved: 0,
+        });
+
+        await db.insert(inventoryMovements).values({
+          business_id: businessId,
+          location_id: loc.id,
+          product_id: productId,
+          quantity_delta: qty,
+          type: "initial_import",
+          source_type: "seed",
+          source_id: null,
+          created_by_user_id: ownerUserId,
+          notes: "Seeded by seed.jeff.ts",
+        });
+
+        seededBalances += 1;
+      }
+    }
+  }
+
   console.log(
     `Seeded Jeff: business=${BUSINESS_SLUG} (id=${businessId}), ` +
       `owner=${JEFF_OWNER_EMAIL} (password=${JEFF_OWNER_PASSWORD}), ` +
-      `locations=Amparo+Britalia`,
+      `locations=Amparo+Britalia, ` +
+      `products=+${seededProducts} (total ${sampleProducts.length}), ` +
+      `balances=+${seededBalances}`,
   );
 }
 
