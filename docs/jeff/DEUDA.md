@@ -61,7 +61,9 @@ La UI cambia "Borrar venta" → "Anular venta" con motivo obligatorio.
 1. Batch 1: agregar columna nullable, dejar `user_uid` intacto. Routers filtran por `business_id IS NOT NULL ? = :businessId : user_uid = :userId` (fallback temporal).
 2. Batch 2 o 3: backfill de `business_id` desde memberships del `user_uid` correspondiente, hacer NOT NULL, eventualmente quitar dependencia de `user_uid` para customers.
 
-**Estado:** abierta. Se mitiga en Batch 1.
+**Estado:** mitigada a nivel query.
+
+**Cerrado parcial:** commit `26a3fe0` (Batch 1) agrega columna nullable. Commits `7a215ae` + `a392abf` (Batch 1.5) introducen `resolveActiveContext` y migran `customers.list`/`customers.create` a usar `ctx.activeBusinessId` con fallback `user_uid`. Pendiente final: backfill de datos existentes y NOT NULL en Batch 3 cuando inventory exista y los datos legacy se puedan migrar coherentemente.
 
 ## DA-5 — `paymentMethods` no tiene scope de negocio
 
@@ -77,7 +79,7 @@ WHERE business_id IS NULL OR business_id = :currentBusinessId
 
 Metodos globales existentes (efectivo, transferencia generica) quedan `business_id = NULL` y son visibles para todos. Metodos especificos del negocio se asocian a ese `business_id`.
 
-**Estado:** abierta. Se mitiga en Batch 1.
+**Estado:** cerrada a nivel query. Batch 1 (commit `26a3fe0`) agrega columna nullable. Batch 1.5 (commits `7a215ae` + `a392abf`) implementa el filter `IS NULL OR = :id` en `paymentMethods.list` via `ctx.activeBusinessId`, y `paymentMethods.create` persiste `business_id` desde el contexto activo. Sin backfill pendiente (los metodos existentes quedan globales por defecto, comportamiento deseable).
 
 ## Resumen tabular
 
@@ -86,8 +88,8 @@ Metodos globales existentes (efectivo, transferencia generica) quedan `business_
 | DA-1 | `orders.ts:54` | alta | Batch 4 | abierta |
 | DA-2 | `orders.ts` create flow | alta | Batch 3 + Batch 4 | abierta |
 | DA-3 | `orders.ts:123-133` | media | Batch 4 (via void) | abierta |
-| DA-4 | `schema.ts customers` | media | Batch 1 | abierta |
-| DA-5 | `schema.ts paymentMethods` | baja | Batch 1 | abierta |
+| DA-4 | `schema.ts customers` | media | Batch 1 + Batch 1.5 | mitigada (query layer) |
+| DA-5 | `schema.ts paymentMethods` | baja | Batch 1 + Batch 1.5 | cerrada (query layer) |
 
 ## Convencion de cierre
 
