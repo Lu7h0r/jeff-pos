@@ -61,6 +61,11 @@ export const locations = pgTable("locations", {
 });
 
 // ── Products ────────────────────────────────────────────────────────────────
+// Batch 3 augments products with business_id (nullable for legacy demo rows),
+// sku, cost_amount and status. The pre-existing in_stock column stays as a
+// decorative legacy field: demo seed.ts and pre-Batch-3 admin pages still
+// read it. Real on-hand quantities live in inventory_balances per location.
+// Allowed status values (enforced in zod): active, draft, archived.
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -69,6 +74,10 @@ export const products = pgTable("products", {
   in_stock: integer("in_stock").notNull(),
   user_uid: varchar("user_uid", { length: 255 }).notNull(),
   category: varchar("category", { length: 50 }),
+  business_id: integer("business_id").references(() => businesses.id),
+  sku: varchar("sku", { length: 64 }),
+  cost_amount: integer("cost_amount"),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -310,3 +319,96 @@ export const cashMovementsRelations = relations(cashMovements, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+// ── Inventory Balances ──────────────────────────────────────────────────────
+// On-hand stock per (business, location, product). Logical uniqueness on
+// (business_id, location_id, product_id) is enforced at the router layer
+// because helpers.ts:tableToDDL does not emit compound UNIQUE constraints.
+// quantity_reserved stays 0 throughout Batch 3 — reservations land in a
+// future batch when PostgreSQL real (not PGlite) is wired in.
+export const inventoryBalances = pgTable("inventory_balances", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  product_id: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  quantity_on_hand: integer("quantity_on_hand").notNull().default(0),
+  quantity_reserved: integer("quantity_reserved").notNull().default(0),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// ── Inventory Movements (ledger) ────────────────────────────────────────────
+// Append-only ledger for stock changes. quantity_delta is signed: positive
+// = in, negative = out. type allowed values (enforced via zod at router
+// layer): adjustment, transfer_in, transfer_out, initial_import,
+// internal_consumption. The varchar(30) length also accommodates future
+// values reserved for Batch 4/6: sale, refund, purchase.
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  product_id: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  quantity_delta: integer("quantity_delta").notNull(),
+  type: varchar("type", { length: 30 }).notNull(),
+  source_type: varchar("source_type", { length: 50 }),
+  source_id: integer("source_id"),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const inventoryBalancesRelations = relations(
+  inventoryBalances,
+  ({ one }) => ({
+    business: one(businesses, {
+      fields: [inventoryBalances.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [inventoryBalances.location_id],
+      references: [locations.id],
+    }),
+    product: one(products, {
+      fields: [inventoryBalances.product_id],
+      references: [products.id],
+    }),
+  }),
+);
+
+export const inventoryMovementsRelations = relations(
+  inventoryMovements,
+  ({ one }) => ({
+    business: one(businesses, {
+      fields: [inventoryMovements.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [inventoryMovements.location_id],
+      references: [locations.id],
+    }),
+    product: one(products, {
+      fields: [inventoryMovements.product_id],
+      references: [products.id],
+    }),
+    createdBy: one(user, {
+      fields: [inventoryMovements.created_by_user_id],
+      references: [user.id],
+    }),
+  }),
+);
