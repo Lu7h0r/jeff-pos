@@ -5,6 +5,7 @@ import {
   text,
   integer,
   timestamp,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { user } from "./auth-schema";
@@ -509,3 +510,191 @@ export const inventoryMovementsRelations = relations(
     }),
   }),
 );
+
+// ── Expense Categories (Batch 6) ────────────────────────────────────────────
+// Pattern inspired by NexoPOS nexopos_expenses_categories. Distinct from
+// procurements/inventory purchases — operational P&L only. Allowed kind
+// values (informational, no semantics in MVP, enforced at zod): operational,
+// recurring, one_off.
+export const expenseCategories = pgTable("expense_categories", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  kind: varchar("kind", { length: 20 }).notNull().default("operational"),
+  archived: boolean("archived").notNull().default(false),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Expense Entries (Batch 6) ───────────────────────────────────────────────
+// One row per registered expense. location_id nullable for business-wide
+// expenses (accounting, central marketing). cash_session_id is set when the
+// expense is paid out of an open session so cash close has full audit
+// context (mirrors order_payments pattern).
+export const expenseEntries = pgTable("expense_entries", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id").references(() => locations.id),
+  category_id: integer("category_id")
+    .notNull()
+    .references(() => expenseCategories.id),
+  amount: integer("amount").notNull(),
+  payment_method_id: integer("payment_method_id").references(
+    () => paymentMethods.id,
+  ),
+  cash_session_id: integer("cash_session_id").references(() => cashSessions.id),
+  description: text("description"),
+  incurred_at: timestamp("incurred_at").notNull(),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Suppliers (Batch 6) ─────────────────────────────────────────────────────
+export const suppliers = pgTable("suppliers", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  contact_email: varchar("contact_email", { length: 255 }),
+  contact_phone: varchar("contact_phone", { length: 50 }),
+  notes: text("notes"),
+  archived: boolean("archived").notNull().default(false),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Purchase Orders (Batch 6) ───────────────────────────────────────────────
+// Procurements ledger. Strictly separate from expense_entries: a purchase
+// adds inventory + may move cash; an expense only moves cash. Allowed
+// status values (enforced in zod): draft, received, cancelled.
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  supplier_id: integer("supplier_id").references(() => suppliers.id),
+  status: varchar("status", { length: 20 }).notNull().default("draft"),
+  total_amount: integer("total_amount").notNull().default(0),
+  payment_method_id: integer("payment_method_id").references(
+    () => paymentMethods.id,
+  ),
+  cash_session_id: integer("cash_session_id").references(() => cashSessions.id),
+  notes: text("notes"),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+  received_at: timestamp("received_at"),
+});
+
+// ── Purchase Items (Batch 6) ────────────────────────────────────────────────
+export const purchaseItems = pgTable("purchase_items", {
+  id: serial("id").primaryKey(),
+  purchase_order_id: integer("purchase_order_id")
+    .notNull()
+    .references(() => purchaseOrders.id),
+  product_id: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+  quantity: integer("quantity").notNull(),
+  unit_cost: integer("unit_cost").notNull(),
+  total_cost: integer("total_cost").notNull(),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+// ── Batch 6 Relations ───────────────────────────────────────────────────────
+export const expenseCategoriesRelations = relations(
+  expenseCategories,
+  ({ one, many }) => ({
+    business: one(businesses, {
+      fields: [expenseCategories.business_id],
+      references: [businesses.id],
+    }),
+    entries: many(expenseEntries),
+  }),
+);
+
+export const expenseEntriesRelations = relations(expenseEntries, ({ one }) => ({
+  business: one(businesses, {
+    fields: [expenseEntries.business_id],
+    references: [businesses.id],
+  }),
+  location: one(locations, {
+    fields: [expenseEntries.location_id],
+    references: [locations.id],
+  }),
+  category: one(expenseCategories, {
+    fields: [expenseEntries.category_id],
+    references: [expenseCategories.id],
+  }),
+  paymentMethod: one(paymentMethods, {
+    fields: [expenseEntries.payment_method_id],
+    references: [paymentMethods.id],
+  }),
+  cashSession: one(cashSessions, {
+    fields: [expenseEntries.cash_session_id],
+    references: [cashSessions.id],
+  }),
+  createdBy: one(user, {
+    fields: [expenseEntries.created_by_user_id],
+    references: [user.id],
+  }),
+}));
+
+export const suppliersRelations = relations(suppliers, ({ one, many }) => ({
+  business: one(businesses, {
+    fields: [suppliers.business_id],
+    references: [businesses.id],
+  }),
+  purchaseOrders: many(purchaseOrders),
+}));
+
+export const purchaseOrdersRelations = relations(
+  purchaseOrders,
+  ({ one, many }) => ({
+    business: one(businesses, {
+      fields: [purchaseOrders.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [purchaseOrders.location_id],
+      references: [locations.id],
+    }),
+    supplier: one(suppliers, {
+      fields: [purchaseOrders.supplier_id],
+      references: [suppliers.id],
+    }),
+    paymentMethod: one(paymentMethods, {
+      fields: [purchaseOrders.payment_method_id],
+      references: [paymentMethods.id],
+    }),
+    cashSession: one(cashSessions, {
+      fields: [purchaseOrders.cash_session_id],
+      references: [cashSessions.id],
+    }),
+    createdBy: one(user, {
+      fields: [purchaseOrders.created_by_user_id],
+      references: [user.id],
+    }),
+    items: many(purchaseItems),
+  }),
+);
+
+export const purchaseItemsRelations = relations(purchaseItems, ({ one }) => ({
+  purchaseOrder: one(purchaseOrders, {
+    fields: [purchaseItems.purchase_order_id],
+    references: [purchaseOrders.id],
+  }),
+  product: one(products, {
+    fields: [purchaseItems.product_id],
+    references: [products.id],
+  }),
+}));
