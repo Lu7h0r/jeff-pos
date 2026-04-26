@@ -85,3 +85,26 @@ export function makeUser(id: string) {
     updatedAt: new Date(),
   };
 }
+
+/**
+ * Builds a complete TRPCContext-shaped object for tests. Use when a test
+ * needs to exercise router behaviour that depends on activeBusinessId or
+ * activeLocationId. For tests that only need an authenticated user, passing
+ * `{ user: makeUser(uid) }` to the caller factory still works because router
+ * code uses `ctx.activeBusinessId != null` (catches both null and undefined).
+ */
+export function makeContext(
+  uid: string,
+  active?: {
+    businessId?: number | null;
+    locationId?: number | null;
+    role?: string | null;
+  },
+) {
+  return {
+    user: makeUser(uid),
+    activeBusinessId: active?.businessId ?? null,
+    activeLocationId: active?.locationId ?? null,
+    activeRole: active?.role ?? null,
+  };
+}
