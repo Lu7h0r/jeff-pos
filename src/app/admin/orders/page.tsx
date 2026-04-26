@@ -1,14 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useForm } from "@tanstack/react-form";
-import { z } from "zod/v4";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FilePenIcon, TrashIcon, EyeIcon, ShoppingCartIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { DeleteConfirmationDialog } from "@/components/delete-confirmation-dialog";
@@ -21,18 +17,12 @@ import { SearchFilter, type FilterOption } from "@/components/ui/search-filter";
 import type { RouterOutputs } from "@/lib/trpc/router";
 
 type Order = RouterOutputs["orders"]["list"][number];
-type OrderStatus = "completed" | "pending" | "cancelled";
-
-const orderEditSchema = z.object({
-  total: z.string().min(1, "Total is required"),
-  status: z.enum(["completed", "pending", "cancelled"]),
-});
 
 const statusFilterOptions: FilterOption[] = [
   { label: "All", value: "all" },
-  { label: "Completed", value: "completed", variant: "success" },
+  { label: "Complete", value: "complete", variant: "success" },
   { label: "Pending", value: "pending", variant: "warning" },
-  { label: "Cancelled", value: "cancelled", variant: "danger" },
+  { label: "Void", value: "void", variant: "danger" },
 ];
 
 const tableColumns: Column<Order>[] = [
@@ -52,12 +42,17 @@ const tableColumns: Column<Order>[] = [
     render: (row) => `$${(row.total_amount / 100).toFixed(2)}`,
   },
   {
-    key: "status",
+    key: "process_status",
     header: "Status",
     sortable: true,
     render: (row) => {
-      const s = row.status ?? "pending";
-      const color = s === "completed" ? "text-green-600" : s === "cancelled" ? "text-red-600" : "text-yellow-600";
+      const s = row.process_status;
+      const color =
+        s === "complete"
+          ? "text-green-600"
+          : s === "void"
+            ? "text-red-600"
+            : "text-yellow-600";
       return <span className={color}>{s.charAt(0).toUpperCase() + s.slice(1)}</span>;
     },
   },
@@ -75,7 +70,7 @@ const exportColumns: ExportColumn<Order>[] = [
   { key: "id", header: "Order ID", getValue: (o) => o.id },
   { key: "customer", header: "Customer", getValue: (o) => o.customer?.name ?? "" },
   { key: "total", header: "Total", getValue: (o) => (o.total_amount / 100).toFixed(2) },
-  { key: "status", header: "Status", getValue: (o) => o.status ?? "pending" },
+  { key: "status", header: "Status", getValue: (o) => o.process_status },
   { key: "date", header: "Date", getValue: (o) => o.created_at ? new Date(o.created_at).toLocaleDateString() : "" },
 ];
 
@@ -83,27 +78,30 @@ export default function OrdersPage() {
   const trpc = useTRPC();
   const { data: orders = [], isLoading, error } = useQuery(trpc.orders.list.queryOptions());
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [editCustomerName, setEditCustomerName] = useState("");
 
   const invalidateKeys = trpc.orders.list.queryOptions().queryKey;
 
-  const updateMutation = useCrudMutation({
-    mutationOptions: trpc.orders.update.mutationOptions(),
+  // Closes DA-8: total/status changes are no longer editable. The only
+  // post-sale mutation is notes; total/state changes go through void +
+  // new sale.
+  const editNotesMutation = useCrudMutation({
+    mutationOptions: trpc.orders.editNotes.mutationOptions(),
     invalidateKeys,
-    successMessage: "Order updated",
-    errorMessage: "Failed to update order",
-    onSuccess: () => setIsDialogOpen(false),
+    successMessage: "Notes updated",
+    errorMessage: "Failed to update notes",
+    onSuccess: () => {
+      setIsNotesOpen(false);
+      setEditingOrder(null);
+    },
   });
 
-  // Batch 4: orders.delete was replaced by orders.void (DA-3 closure).
-  // The "Delete" affordance now triggers a void with a mandatory reason
-  // prompt; the row is preserved for audit and inventory/cash are reversed.
   const voidMutation = useCrudMutation({
     mutationOptions: trpc.orders.void.mutationOptions(),
     invalidateKeys,
@@ -111,40 +109,29 @@ export default function OrdersPage() {
     errorMessage: "Failed to void order",
   });
 
-  const form = useForm({
-    defaultValues: { total: "", status: "pending" as OrderStatus },
-    validators: {
-      onSubmit: orderEditSchema,
-    },
-    onSubmit: ({ value }) => {
-      if (editingId !== null) {
-        updateMutation.mutate({
-          id: editingId,
-          total_amount: Math.round(parseFloat(value.total) * 100),
-          status: value.status,
-        });
-      }
-    },
-  });
-
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
-      if (statusFilter !== "all" && o.status !== statusFilter) return false;
+      if (statusFilter !== "all" && o.process_status !== statusFilter) return false;
       const q = searchTerm.toLowerCase();
       return (o.customer?.name ?? "").toLowerCase().includes(q) || o.id.toString().includes(searchTerm);
     });
   }, [orders, statusFilter, searchTerm]);
 
-  const openEdit = (o: Order) => {
-    setEditingId(o.id);
-    setEditCustomerName(o.customer?.name ?? "");
-    form.reset();
-    form.setFieldValue("total", (o.total_amount / 100).toString());
-    form.setFieldValue("status", (o.status ?? "pending") as OrderStatus);
-    setIsDialogOpen(true);
+  const openNotesEditor = (o: Order) => {
+    setEditingOrder(o);
+    setNotesDraft(o.notes ?? "");
+    setIsNotesOpen(true);
   };
 
-  const handleDelete = () => {
+  const submitNotes = () => {
+    if (!editingOrder) return;
+    editNotesMutation.mutate({
+      orderId: editingOrder.id,
+      notes: notesDraft,
+    });
+  };
+
+  const handleVoid = () => {
     if (deleteId !== null) {
       const reason = typeof window !== "undefined"
         ? window.prompt("Reason for voiding this order (min 3 characters):") ?? ""
@@ -162,8 +149,8 @@ export default function OrdersPage() {
     header: "Actions",
     render: (row) => (
       <TableActions>
-        <TableActionButton onClick={() => openEdit(row)} icon={<FilePenIcon className="w-4 h-4" />} label="Edit" />
-        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label="Delete" />
+        <TableActionButton onClick={() => openNotesEditor(row)} icon={<FilePenIcon className="w-4 h-4" />} label="Editar notas" />
+        <TableActionButton variant="danger" onClick={() => { setDeleteId(row.id); setIsDeleteOpen(true); }} icon={<TrashIcon className="w-4 h-4" />} label="Anular" />
         <Link href={`/admin/orders/${row.id}`} prefetch={false} onClick={(e) => e.stopPropagation()}>
           <Button size="icon" variant="ghost"><EyeIcon className="w-4 h-4" /><span className="sr-only">View</span></Button>
         </Link>
@@ -204,56 +191,39 @@ export default function OrdersPage() {
         />
       </CardContent>
 
-      <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setIsDialogOpen(false); }}>
+      <Dialog open={isNotesOpen} onOpenChange={(open) => { if (!open) { setIsNotesOpen(false); setEditingOrder(null); } }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Order</DialogTitle></DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              form.handleSubmit();
-            }}
-          >
-            <div className="grid gap-4 py-4">
-              <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                <Label htmlFor="customerName">Customer</Label>
-                <Input id="customerName" value={editCustomerName} disabled className="col-span-3" />
-              </div>
-              <form.Field name="total">
-                {(field) => (
-                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="total">Total</Label>
-                    <div className="col-span-3">
-                      <Input id="total" type="number" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} onBlur={field.handleBlur} error={field.state.meta.errors.length > 0 ? field.state.meta.errors.map(e => e?.message ?? e).join(", ") : undefined} />
-                    </div>
-                  </div>
-                )}
-              </form.Field>
-              <form.Field name="status">
-                {(field) => (
-                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={field.state.value} onValueChange={(value) => field.handleChange(value as OrderStatus)}>
-                      <SelectTrigger id="status" className="col-span-3"><SelectValue placeholder="Select status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </form.Field>
+          <DialogHeader>
+            <DialogTitle>Editar notas — Orden #{editingOrder?.id ?? ""}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <p className="text-xs text-muted-foreground">
+              Total y estado no son editables. Para corregir una venta, usá Anular y registrá una venta nueva.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="order-notes">Notas</Label>
+              <textarea
+                id="order-notes"
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                rows={5}
+                placeholder="Notas internas de la orden"
+                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              />
             </div>
-            <DialogFooter>
-              <Button variant="secondary" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={updateMutation.isPending}>Update Order</Button>
-            </DialogFooter>
-          </form>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => { setIsNotesOpen(false); setEditingOrder(null); }}>
+              Cancelar
+            </Button>
+            <Button onClick={submitNotes} disabled={editNotesMutation.isPending || !editingOrder}>
+              Guardar notas
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleDelete} description="Voiding will reverse stock and cash. The row is preserved for audit. You will be asked for a reason." />
+      <DeleteConfirmationDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen} onConfirm={handleVoid} description="Voiding will reverse stock and cash. The row is preserved for audit. You will be asked for a reason." />
     </Card>
   );
 }
