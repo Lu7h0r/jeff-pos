@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ReceiptIcon, PlusCircleIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { useTRPC } from "@/lib/trpc/client";
 import { useCrudMutation } from "@/hooks/use-crud-mutation";
+import { formatCurrency } from "@/lib/utils";
 
 type EntryFormState = {
   categoryId: string;
@@ -52,15 +54,9 @@ const EMPTY_ENTRY: EntryFormState = {
   incurredAt: new Date().toISOString().slice(0, 10),
 };
 
-function formatMoney(minor: number) {
-  return (minor / 100).toLocaleString("es-CO", {
-    style: "currency",
-    currency: "COP",
-    minimumFractionDigits: 2,
-  });
-}
-
 export default function ExpensesPage() {
+  const t = useTranslations("expenses");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
 
   const entriesQuery = useQuery(trpc.expenses.entries.list.queryOptions({}));
@@ -79,8 +75,8 @@ export default function ExpensesPage() {
   const createEntry = useCrudMutation({
     mutationOptions: trpc.expenses.entries.create.mutationOptions(),
     invalidateKeys: entriesKey,
-    successMessage: "Expense registered",
-    errorMessage: "Failed to register expense",
+    successMessage: t("expenseRegistered"),
+    errorMessage: t("expenseRegisterFailed"),
     onSuccess: () => {
       setEntryForm(EMPTY_ENTRY);
       setEntryDialogOpen(false);
@@ -90,8 +86,8 @@ export default function ExpensesPage() {
   const createCategory = useCrudMutation({
     mutationOptions: trpc.expenses.categories.create.mutationOptions(),
     invalidateKeys: categoriesKey,
-    successMessage: "Category created",
-    errorMessage: "Failed to create category",
+    successMessage: t("categoryCreated"),
+    errorMessage: t("categoryCreateFailed"),
     onSuccess: () => {
       setCategoryName("");
       setCategoryDialogOpen(false);
@@ -138,17 +134,17 @@ export default function ExpensesPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <ReceiptIcon className="w-5 h-5" />
-            <CardTitle>Expenses (current month)</CardTitle>
+            <CardTitle>{t("monthCardTitle")}</CardTitle>
           </div>
-          <div className="text-2xl font-semibold">{formatMoney(monthTotal)}</div>
+          <div className="text-2xl font-semibold">{formatCurrency(monthTotal)}</div>
         </CardHeader>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Categories</CardTitle>
+          <CardTitle>{t("categoriesTitle")}</CardTitle>
           <Button size="sm" variant="outline" onClick={() => setCategoryDialogOpen(true)}>
-            <PlusCircleIcon className="w-4 h-4 mr-2" /> New category
+            <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("newCategory")}
           </Button>
         </CardHeader>
         <CardContent>
@@ -162,7 +158,7 @@ export default function ExpensesPage() {
               </li>
             ))}
             {categoriesQuery.data && categoriesQuery.data.length === 0 && (
-              <li className="text-sm text-muted-foreground">No categories yet.</li>
+              <li className="text-sm text-muted-foreground">{t("categoryEmpty")}</li>
             )}
           </ul>
         </CardContent>
@@ -170,36 +166,36 @@ export default function ExpensesPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Entries</CardTitle>
+          <CardTitle>{t("entriesTitle")}</CardTitle>
           <Button size="sm" onClick={() => setEntryDialogOpen(true)}>
-            <PlusCircleIcon className="w-4 h-4 mr-2" /> New expense
+            <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("newExpense")}
           </Button>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>{t("colDate")}</TableHead>
+                <TableHead>{t("colCategory")}</TableHead>
+                <TableHead>{t("colDescription")}</TableHead>
+                <TableHead className="text-right">{t("colAmount")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {entries.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell>
-                    {new Date(e.incurred_at).toLocaleDateString("es-CO")}
+                    {new Date(e.incurred_at).toLocaleDateString("es-AR")}
                   </TableCell>
                   <TableCell>{e.category_name}</TableCell>
                   <TableCell>{e.description ?? "—"}</TableCell>
-                  <TableCell className="text-right">{formatMoney(e.amount)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(e.amount)}</TableCell>
                 </TableRow>
               ))}
               {entries.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center text-muted-foreground">
-                    No expenses registered.
+                    {t("empty")}
                   </TableCell>
                 </TableRow>
               )}
@@ -211,17 +207,17 @@ export default function ExpensesPage() {
       <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New expense</DialogTitle>
+            <DialogTitle>{t("newExpenseTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
-              <Label>Category</Label>
+              <Label>{t("categoryLabel")}</Label>
               <Select
                 value={entryForm.categoryId}
                 onValueChange={(v) => setEntryForm((s) => ({ ...s, categoryId: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
+                  <SelectValue placeholder={t("selectCategory")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(categoriesQuery.data ?? []).map((c) => (
@@ -233,7 +229,7 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Amount (COP)</Label>
+              <Label>{t("amountLabel")}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -242,7 +238,7 @@ export default function ExpensesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Date</Label>
+              <Label>{t("dateLabel")}</Label>
               <Input
                 type="date"
                 value={entryForm.incurredAt}
@@ -252,13 +248,13 @@ export default function ExpensesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Location (optional)</Label>
+              <Label>{t("locationOptional")}</Label>
               <Select
                 value={entryForm.locationId}
                 onValueChange={(v) => setEntryForm((s) => ({ ...s, locationId: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Business-wide" />
+                  <SelectValue placeholder={t("businessWide")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(locationsQuery.data ?? []).map((l) => (
@@ -270,7 +266,7 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Payment method (optional)</Label>
+              <Label>{t("paymentMethodOptional")}</Label>
               <Select
                 value={entryForm.paymentMethodId}
                 onValueChange={(v) =>
@@ -278,7 +274,7 @@ export default function ExpensesPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="None" />
+                  <SelectValue placeholder={t("noneOption")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(paymentMethodsQuery.data ?? []).map((p) => (
@@ -290,7 +286,7 @@ export default function ExpensesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Cash session id (optional)</Label>
+              <Label>{t("cashSessionId")}</Label>
               <Input
                 type="number"
                 value={entryForm.cashSessionId}
@@ -300,7 +296,7 @@ export default function ExpensesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Description</Label>
+              <Label>{t("descriptionLabel")}</Label>
               <Input
                 value={entryForm.description}
                 onChange={(e) =>
@@ -311,10 +307,10 @@ export default function ExpensesPage() {
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setEntryDialogOpen(false)}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={submitEntry} disabled={createEntry.isPending}>
-              Save
+              {tc("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -323,22 +319,22 @@ export default function ExpensesPage() {
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New category</DialogTitle>
+            <DialogTitle>{t("newCategoryTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 py-4">
-            <Label>Name</Label>
+            <Label>{tc("name")}</Label>
             <Input
               value={categoryName}
               onChange={(e) => setCategoryName(e.target.value)}
-              placeholder="e.g. Insumos"
+              placeholder={t("categoryNamePlaceholder")}
             />
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setCategoryDialogOpen(false)}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={submitCategory} disabled={createCategory.isPending}>
-              Create
+              {tc("create")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -9,6 +9,7 @@ import {
   XCircleIcon,
   Trash2Icon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useTRPC } from "@/lib/trpc/client";
 import { useCrudMutation } from "@/hooks/use-crud-mutation";
+import { formatCurrency } from "@/lib/utils";
 
 type LineItem = { productId: string; quantity: string; unitCost: string };
 
@@ -60,14 +62,6 @@ const EMPTY_FORM: FormState = {
   items: [{ ...EMPTY_LINE }],
 };
 
-function formatMoney(minor: number) {
-  return (minor / 100).toLocaleString("es-CO", {
-    style: "currency",
-    currency: "COP",
-    minimumFractionDigits: 2,
-  });
-}
-
 function statusVariant(
   status: "draft" | "received" | "cancelled",
 ): "default" | "secondary" | "destructive" | "outline" {
@@ -77,6 +71,8 @@ function statusVariant(
 }
 
 export default function PurchasesPage() {
+  const t = useTranslations("purchases");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const listQuery = useQuery(trpc.purchases.list.queryOptions({}));
   const productsQuery = useQuery(trpc.products.list.queryOptions());
@@ -91,8 +87,8 @@ export default function PurchasesPage() {
   const createMutation = useCrudMutation({
     mutationOptions: trpc.purchases.create.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Purchase created",
-    errorMessage: "Failed to create purchase",
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
     onSuccess: () => {
       setForm(EMPTY_FORM);
       setDialogOpen(false);
@@ -102,16 +98,23 @@ export default function PurchasesPage() {
   const receiveMutation = useCrudMutation({
     mutationOptions: trpc.purchases.receive.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Purchase received",
-    errorMessage: "Failed to receive purchase",
+    successMessage: t("received"),
+    errorMessage: t("receiveFailed"),
   });
 
   const cancelMutation = useCrudMutation({
     mutationOptions: trpc.purchases.cancel.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Purchase cancelled",
-    errorMessage: "Failed to cancel purchase",
+    successMessage: t("cancelled"),
+    errorMessage: t("cancelFailed"),
   });
+
+  const statusLabel = (s: "draft" | "received" | "cancelled") =>
+    s === "received"
+      ? t("statusReceived")
+      : s === "cancelled"
+        ? t("statusCancelled")
+        : t("statusDraft");
 
   const updateLine = (idx: number, patch: Partial<LineItem>) => {
     setForm((s) => ({
@@ -166,22 +169,22 @@ export default function PurchasesPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <ShoppingBasketIcon className="w-5 h-5" />
-          <CardTitle>Purchase orders</CardTitle>
+          <CardTitle>{t("title")}</CardTitle>
         </div>
         <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <PlusCircleIcon className="w-4 h-4 mr-2" /> New purchase
+          <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("newPurchase")}
         </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>#</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("colId")}</TableHead>
+              <TableHead>{t("colStatus")}</TableHead>
+              <TableHead>{t("colLocation")}</TableHead>
+              <TableHead className="text-right">{t("colTotal")}</TableHead>
+              <TableHead>{t("colCreated")}</TableHead>
+              <TableHead className="text-right">{t("colActions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -189,15 +192,15 @@ export default function PurchasesPage() {
               <TableRow key={o.id}>
                 <TableCell className="font-mono">{o.id}</TableCell>
                 <TableCell>
-                  <Badge variant={statusVariant(o.status)}>{o.status}</Badge>
+                  <Badge variant={statusVariant(o.status)}>{statusLabel(o.status)}</Badge>
                 </TableCell>
                 <TableCell>{o.location_id}</TableCell>
                 <TableCell className="text-right">
-                  {formatMoney(o.total_amount)}
+                  {formatCurrency(o.total_amount)}
                 </TableCell>
                 <TableCell>
                   {o.created_at
-                    ? new Date(o.created_at).toLocaleDateString("es-CO")
+                    ? new Date(o.created_at).toLocaleDateString("es-AR")
                     : "—"}
                 </TableCell>
                 <TableCell className="text-right">
@@ -211,7 +214,7 @@ export default function PurchasesPage() {
                           receiveMutation.mutate({ purchaseOrderId: o.id })
                         }
                       >
-                        <CheckCircle2Icon className="w-4 h-4 mr-1" /> Receive
+                        <CheckCircle2Icon className="w-4 h-4 mr-1" /> {t("receive")}
                       </Button>
                       <Button
                         size="sm"
@@ -221,7 +224,7 @@ export default function PurchasesPage() {
                           cancelMutation.mutate({ purchaseOrderId: o.id })
                         }
                       >
-                        <XCircleIcon className="w-4 h-4 mr-1" /> Cancel
+                        <XCircleIcon className="w-4 h-4 mr-1" /> {t("cancelAction")}
                       </Button>
                     </div>
                   )}
@@ -231,7 +234,7 @@ export default function PurchasesPage() {
             {orders.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  No purchase orders yet.
+                  {t("empty")}
                 </TableCell>
               </TableRow>
             )}
@@ -242,17 +245,17 @@ export default function PurchasesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>New purchase</DialogTitle>
+            <DialogTitle>{t("newPurchaseTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
-              <Label>Location</Label>
+              <Label>{t("locationLabel")}</Label>
               <Select
                 value={form.locationId}
                 onValueChange={(v) => setForm((s) => ({ ...s, locationId: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a location" />
+                  <SelectValue placeholder={t("selectLocation")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(locationsQuery.data ?? []).map((l) => (
@@ -264,13 +267,13 @@ export default function PurchasesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Supplier (optional)</Label>
+              <Label>{t("supplierOptional")}</Label>
               <Select
                 value={form.supplierId}
                 onValueChange={(v) => setForm((s) => ({ ...s, supplierId: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Walk-in" />
+                  <SelectValue placeholder={t("walkInSupplier")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(suppliersQuery.data ?? []).map((sup) => (
@@ -282,7 +285,7 @@ export default function PurchasesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Payment method (optional)</Label>
+              <Label>{t("paymentMethodOptional")}</Label>
               <Select
                 value={form.paymentMethodId}
                 onValueChange={(v) =>
@@ -290,7 +293,7 @@ export default function PurchasesPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="None" />
+                  <SelectValue placeholder={t("noneOption")} />
                 </SelectTrigger>
                 <SelectContent>
                   {(paymentMethodsQuery.data ?? []).map((p) => (
@@ -302,7 +305,7 @@ export default function PurchasesPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Cash session id (optional)</Label>
+              <Label>{t("cashSessionId")}</Label>
               <Input
                 type="number"
                 value={form.cashSessionId}
@@ -312,7 +315,7 @@ export default function PurchasesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Notes</Label>
+              <Label>{t("notesLabel")}</Label>
               <Input
                 value={form.notes}
                 onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
@@ -320,7 +323,7 @@ export default function PurchasesPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Items</Label>
+              <Label>{t("itemsLabel")}</Label>
               <div className="flex flex-col gap-2">
                 {form.items.map((it, idx) => (
                   <div key={idx} className="flex gap-2 items-end">
@@ -330,7 +333,7 @@ export default function PurchasesPage() {
                         onValueChange={(v) => updateLine(idx, { productId: v })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Product" />
+                          <SelectValue placeholder={t("productPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
                           {(productsQuery.data ?? []).map((p) => (
@@ -348,7 +351,7 @@ export default function PurchasesPage() {
                       onChange={(e) =>
                         updateLine(idx, { quantity: e.target.value })
                       }
-                      placeholder="Qty"
+                      placeholder={t("qtyPlaceholder")}
                     />
                     <Input
                       className="w-32"
@@ -358,7 +361,7 @@ export default function PurchasesPage() {
                       onChange={(e) =>
                         updateLine(idx, { unitCost: e.target.value })
                       }
-                      placeholder="Unit cost"
+                      placeholder={t("unitCostPlaceholder")}
                     />
                     <Button
                       type="button"
@@ -372,17 +375,17 @@ export default function PurchasesPage() {
                   </div>
                 ))}
                 <Button type="button" size="sm" variant="outline" onClick={addLine}>
-                  <PlusCircleIcon className="w-4 h-4 mr-2" /> Add item
+                  <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("addItem")}
                 </Button>
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={submit} disabled={createMutation.isPending}>
-              Save draft
+              {t("saveDraft")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TruckIcon, PlusCircleIcon, ArchiveIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,8 @@ type FormState = {
 const EMPTY: FormState = { name: "", contactEmail: "", contactPhone: "", notes: "" };
 
 export default function SuppliersPage() {
+  const t = useTranslations("suppliers");
+  const tc = useTranslations("common");
   const trpc = useTRPC();
   const listQuery = useQuery(trpc.suppliers.list.queryOptions());
   const listKey = trpc.suppliers.list.queryOptions().queryKey;
@@ -45,8 +48,8 @@ export default function SuppliersPage() {
   const createMutation = useCrudMutation({
     mutationOptions: trpc.suppliers.create.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Supplier created",
-    errorMessage: "Failed to create supplier",
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
     onSuccess: () => {
       setForm(EMPTY);
       setDialogOpen(false);
@@ -56,8 +59,8 @@ export default function SuppliersPage() {
   const archiveMutation = useCrudMutation({
     mutationOptions: trpc.suppliers.archive.mutationOptions(),
     invalidateKeys: listKey,
-    successMessage: "Supplier archived",
-    errorMessage: "Failed to archive supplier",
+    successMessage: t("archived"),
+    errorMessage: t("archiveFailed"),
   });
 
   const submit = () => {
@@ -77,20 +80,20 @@ export default function SuppliersPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <TruckIcon className="w-5 h-5" />
-          <CardTitle>Suppliers</CardTitle>
+          <CardTitle>{t("title")}</CardTitle>
         </div>
         <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <PlusCircleIcon className="w-4 h-4 mr-2" /> New supplier
+          <PlusCircleIcon className="w-4 h-4 mr-2" /> {t("newSupplier")}
         </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("colName")}</TableHead>
+              <TableHead>{t("colEmail")}</TableHead>
+              <TableHead>{t("colPhone")}</TableHead>
+              <TableHead className="text-right">{t("colActions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -106,7 +109,7 @@ export default function SuppliersPage() {
                     onClick={() => archiveMutation.mutate({ id: s.id })}
                     disabled={archiveMutation.isPending}
                   >
-                    <ArchiveIcon className="w-4 h-4 mr-2" /> Archive
+                    <ArchiveIcon className="w-4 h-4 mr-2" /> {tc("archive")}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -114,7 +117,7 @@ export default function SuppliersPage() {
             {suppliers.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground">
-                  No suppliers yet.
+                  {t("empty")}
                 </TableCell>
               </TableRow>
             )}
@@ -125,18 +128,18 @@ export default function SuppliersPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New supplier</DialogTitle>
+            <DialogTitle>{t("newSupplierTitle")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-4">
             <div className="grid gap-2">
-              <Label>Name</Label>
+              <Label>{t("nameLabel")}</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
               />
             </div>
             <div className="grid gap-2">
-              <Label>Email</Label>
+              <Label>{t("emailLabel")}</Label>
               <Input
                 type="email"
                 value={form.contactEmail}
@@ -146,7 +149,7 @@ export default function SuppliersPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Phone</Label>
+              <Label>{t("phoneLabel")}</Label>
               <Input
                 value={form.contactPhone}
                 onChange={(e) =>
@@ -155,7 +158,7 @@ export default function SuppliersPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Notes</Label>
+              <Label>{t("notesLabel")}</Label>
               <Input
                 value={form.notes}
                 onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
@@ -164,10 +167,10 @@ export default function SuppliersPage() {
           </div>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={submit} disabled={createMutation.isPending}>
-              Create
+              {tc("create")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -206,7 +206,7 @@ interface AdjustDialogProps {
 
 function AdjustDialog({ row, locationId, onClose, onSuccess }: AdjustDialogProps) {
   const t = useTranslations("inventory");
-  const tc = useTranslations("common");
+  const tCommon = useTranslations("common");
   const trpc = useTRPC();
   const [delta, setDelta] = useState<string>("0");
   const [type, setType] = useState<"adjustment" | "internal_consumption">(
@@ -267,14 +267,12 @@ function AdjustDialog({ row, locationId, onClose, onSuccess }: AdjustDialogProps
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="adjustment">{t("typeAdjustment")}</SelectItem>
-                <SelectItem value="internal_consumption">
-                  {t("typeInternal")}
-                </SelectItem>
+                <SelectItem value="internal_consumption">{t("typeInternal")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="adjust-notes">{tc("notesOptional")}</Label>
+            <Label htmlFor="adjust-notes">{tCommon("notesOptional")}</Label>
             <Input
               id="adjust-notes"
               value={notes}
@@ -284,13 +282,13 @@ function AdjustDialog({ row, locationId, onClose, onSuccess }: AdjustDialogProps
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              {tc("cancel")}
+              {tCommon("cancel")}
             </Button>
             <Button type="submit" disabled={adjustMutation.isPending}>
               {adjustMutation.isPending ? (
                 <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              {tc("save")}
+              {tCommon("save")}
             </Button>
           </DialogFooter>
         </form>
@@ -315,7 +313,7 @@ function TransferDialog({
   onSuccess,
 }: TransferDialogProps) {
   const t = useTranslations("inventory");
-  const tc = useTranslations("common");
+  const tCommon = useTranslations("common");
   const trpc = useTRPC();
   const [productId, setProductId] = useState<string>(
     balances[0] ? String(balances[0].product_id) : "",
@@ -405,7 +403,7 @@ function TransferDialog({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="transfer-notes">{tc("notesOptional")}</Label>
+            <Label htmlFor="transfer-notes">{tCommon("notesOptional")}</Label>
             <Input
               id="transfer-notes"
               value={notes}
@@ -414,7 +412,7 @@ function TransferDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              {tc("cancel")}
+              {tCommon("cancel")}
             </Button>
             <Button
               type="submit"

@@ -6,8 +6,11 @@ import { getRequestConfig } from "next-intl/server";
 const DEFAULT_LOCALE = "es";
 
 export default getRequestConfig(async () => {
-  const messages = (await import(`../../messages/${DEFAULT_LOCALE}.json`))
-    .default;
+  // We name the file `es.json` (not `es-AR.json`) because the next-intl
+  // plugin auto-discovers locale files by base language code. The locale
+  // we expose to the runtime is still "es-AR" so Intl APIs format dates
+  // and currency for Argentina.
+  const messages = (await import("../../messages/es.json")).default;
 
   return {
     locale: DEFAULT_LOCALE,
