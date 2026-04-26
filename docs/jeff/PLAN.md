@@ -58,6 +58,19 @@ Este plan reemplaza la version anterior, que estaba bien como vision pero demasi
 
 La conclusion: **si, FinOpenPOS sirve como base JS rapida**, pero no conviene empezar tirando tablas de agenda, galeria o analytics. Primero hay que arreglar el spine operativo: negocio, sedes, caja, inventario y venta atomica.
 
+### Ajustes Tras Exploracion De Referencias (Batch 0)
+
+Se exploraron `oss/NexoPOS` (Laravel POS, GPLv3, single-store) y `oss/studio-crm` (Laravel CRM tatuaje/piercing, MIT, single-studio). Hallazgos completos en `docs/jeff/REFERENCIAS.md`. Cambios aplicados a este plan:
+
+1. `cash_movements` lleva `balance_before` / `balance_after` / `transaction_type` (running balance, patron NexoPOS) — Batch 2.
+2. `order_payments` 1:N desde dia 1, multi-payment soportado nativamente — Batch 4.
+3. `orders.payment_status` + `orders.process_status` separados (estado financiero vs operativo) — Batch 4.
+4. DA-3 se resuelve con `orders.void` (no delete), reverso de `inventory_movements` y `cash_movements` — Batch 4.
+
+Roles MVP confirmados como `owner`, `manager`, `cashier`, `artist` (mantenemos `owner` sobre el `admin` que usa studio-crm; `receptionist` se difiere).
+
+Anti-patrones rechazados explicitamente (ver REFERENCIAS.md): tabla `financial` flat de studio-crm, `inventory.quantity` global sin location de studio-crm, `register.balance` mutable de NexoPOS.
+
 ## Realidad Del Codigo Actual
 
 ### Stack confirmado
@@ -119,7 +132,9 @@ Un cliente puede mandar `total: 1` para cualquier orden. La validacion de cantid
 
 **DA-3: `orders.delete` tiene FK bug con transactions**
 
-`orders.ts:123-133` borra `orderItems` y luego el orden. Pero `transactions` tiene FK a `orders`. Si existe una transaccion, el delete falla. Documentado en `__tests__/orders.test.ts:200-215`. Se corrige cuando se implemente soft-delete o void de ordenes en Batch 4.
+`orders.ts:123-133` borra `orderItems` y luego el orden. Pero `transactions` tiene FK a `orders`. Si existe una transaccion, el delete falla. Documentado en `__tests__/orders.test.ts:200-215`.
+
+Resolucion confirmada (Batch 4): patron void en lugar de delete (inspirado en NexoPOS `nexopos_orders.voidance_reason` + `process_status: void`, ver `docs/jeff/REFERENCIAS.md`). En lugar de borrar la orden, `orders.void` la marca con `process_status: void` + `voidance_reason` + `voided_at`, crea `inventory_movements` reverso para devolver stock al local correcto, y crea `cash_movements` reverso para revertir el efecto en la caja del turno. La fila se mantiene para auditoria. Cero DELETE, cero perdida de historial contable.
 
 **DA-4: `customers` no tiene `business_id`**
 
@@ -267,7 +282,25 @@ Nota `inventory_balances.quantity_reserved`: campo presente en el schema pero si
 Crear:
 
 - `cash_sessions`
-- `cash_movements` si se necesita registrar retiros, ingresos manuales o ajustes
+- `cash_movements` con balance running para registrar ventas, retiros, ingresos manuales y ajustes
+
+Campos minimos `cash_movements` (patron inspirado en NexoPOS `nexopos_registers_history`, ver `docs/jeff/REFERENCIAS.md`):
+
+- `business_id`
+- `location_id`
+- `cash_session_id`
+- `type`: `sale`, `refund`, `manual_in`, `manual_out`, `adjustment`
+- `payment_method_id`
+- `source_type`, `source_id` (ej: `order`, `:id`)
+- `amount` (positivo o negativo segun tipo)
+- `balance_before`
+- `balance_after`
+- `transaction_type`: `positive`, `negative`, `unchanged`
+- `created_by_user_id`
+- `notes`
+- timestamps
+
+Beneficio: saldo de caja en O(1) leyendo el ultimo movimiento, auditoria completa sin reconstruir desde el principio.
 
 Campos minimos `cash_sessions`:
 
@@ -348,12 +381,16 @@ Modificar input de `orders.create` para recibir:
 - `items`
 - `saleType`: `product`, `service`, `mixed`
 
-`paymentLines` v1:
+`paymentLines` v1 (tabla `order_payments`, 1:N con `orders`, N>=1):
 
-- `paymentMethodId`
+- `order_id`
+- `payment_method_id`
 - `amount`
+- `cash_session_id` (cuando aplica)
+- `created_by_user_id`
+- `created_at`
 
-MVP puede limitar a un pago por venta, pero conviene que la estructura ya soporte varios pagos.
+Decision: multi-payment desde dia 1. Patron inspirado en NexoPOS `nexopos_orders_payments` (ver `docs/jeff/REFERENCIAS.md`). La UI MVP puede mostrar un solo input pero la estructura soporta multiples pagos sin retrabajo posterior. Caso real Jeff: cliente paga parte en efectivo y parte por transferencia.
 
 Flujo servidor:
 
@@ -597,14 +634,19 @@ Objetivo: que una venta real actualice orden, cobro, caja y stock en una transac
 Cambios:
 
 - `orders` agrega `business_id`, `location_id`, `cash_session_id`
-- `order_items` puede guardar snapshot: `product_name`, `unit_price`, `unit_cost`
-- `orders.create` recalcula total en servidor
-- valida caja abierta
+- `orders` agrega `payment_status`: `paid` | `unpaid` | `partially_paid`
+- `orders` agrega `process_status`: `pending` | `ongoing` | `complete` | `void`
+- `orders` agrega `voidance_reason` text nullable y `voided_at` timestamp nullable
+- `order_items` guarda snapshot: `product_name`, `unit_price`, `unit_cost`, `total_price`
+- nueva tabla `order_payments` (1:N con `orders`) — multi-payment desde dia 1
+- `orders.create` recalcula total en servidor (corrige DA-1)
+- valida caja abierta (corrige requisito plan)
 - valida stock por local
-- descuenta balance
-- crea movement `sale`
-- crea transactions con caja/local
+- descuenta balance via `inventory_movements` (corrige DA-2)
+- crea movement `sale` por cada item
+- crea `order_payments` 1:N y `cash_movements` por cada pago
 - POS usa local activo y caja activa
+- nueva tRPC mutation `orders.void`: marca orden, registra `voidance_reason`, crea movements reverso de inventario y caja (resuelve DA-3 sin DELETE)
 
 Tests minimos:
 
