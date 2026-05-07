@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod/v4";
 import { useTranslations } from "next-intl";
@@ -61,6 +61,34 @@ function parseImageUrlsInput(raw: string): string[] {
     .filter((value) => value.length > 0);
 }
 
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_EXTRA_IMAGES = 8;
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+]);
+
+function mergeUniqueUrls(currentRaw: string, incomingUrls: string[]): string {
+  const existing = parseImageUrlsInput(currentRaw);
+  const seen = new Set(existing);
+  const merged = [...existing];
+  for (const url of incomingUrls) {
+    if (!seen.has(url)) {
+      seen.add(url);
+      merged.push(url);
+    }
+  }
+  return merged.join("\n");
+}
+
+function removeUrlFromRaw(currentRaw: string, urlToRemove: string): string {
+  return parseImageUrlsInput(currentRaw)
+    .filter((url) => url !== urlToRemove)
+    .join("\n");
+}
+
 export default function Products() {
   const t = useTranslations("products");
   const tc = useTranslations("common");
@@ -76,6 +104,14 @@ export default function Products() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingExtraImages, setIsUploadingExtraImages] = useState(false);
+  const [isDropzoneActive, setIsDropzoneActive] = useState(false);
+  const [isExtraDropzoneActive, setIsExtraDropzoneActive] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const [extraImagesUploadError, setExtraImagesUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const extraImagesInputRef = useRef<HTMLInputElement | null>(null);
 
   const isEditing = editingId !== null;
   const invalidateKeys = trpc.products.list.queryOptions().queryKey;
@@ -127,6 +163,27 @@ export default function Products() {
   ];
 
   const columns: Column<Product>[] = [
+    {
+      key: "image_preview",
+      header: "Imagen",
+      hideOnMobile: true,
+      render: (row) => {
+        const previewUrl = row.image_url || row.image_urls[0] || "";
+        if (!previewUrl) {
+          return (
+            <div className="h-10 w-10 rounded-md border border-dashed border-muted-foreground/40 bg-muted/30" />
+          );
+        }
+        return (
+          <img
+            src={previewUrl}
+            alt={`Imagen de ${row.name}`}
+            className="h-10 w-10 rounded-md border object-cover"
+            loading="lazy"
+          />
+        );
+      },
+    },
     { key: "name", header: t("colProduct"), sortable: true, className: "font-medium" },
     {
       key: "kind",
@@ -298,12 +355,20 @@ export default function Products() {
 
   const openCreate = () => {
     setEditingId(null);
+    setImageUploadError(null);
+    setExtraImagesUploadError(null);
+    setIsDropzoneActive(false);
+    setIsExtraDropzoneActive(false);
     form.reset();
     setIsDialogOpen(true);
   };
 
   const openEdit = (p: Product) => {
     setEditingId(p.id);
+    setImageUploadError(null);
+    setExtraImagesUploadError(null);
+    setIsDropzoneActive(false);
+    setIsExtraDropzoneActive(false);
     form.reset();
     form.setFieldValue("name", p.name);
     form.setFieldValue("description", p.description ?? "");
@@ -323,6 +388,99 @@ export default function Products() {
       deleteMutation.mutate({ id: deleteId });
       setIsDeleteOpen(false);
       setDeleteId(null);
+    }
+  };
+
+  const validateImageFile = (file: File): string | null => {
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+      return "Formato no permitido. Usa PNG, JPG o WEBP.";
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      return "La imagen supera el límite de 5 MB.";
+    }
+    return null;
+  };
+
+  const uploadImage = async (file: File) => {
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setImageUploadError(validationError);
+      return;
+    }
+
+    setImageUploadError(null);
+    setIsUploadingImage(true);
+    try {
+      const uploadBody = new FormData();
+      uploadBody.append("file", file);
+
+      const response = await fetch("/api/uploads/products", {
+        method: "POST",
+        body: uploadBody,
+      });
+      const data: { url?: string; error?: string } = await response.json();
+
+      if (!response.ok || !data.url) {
+        setImageUploadError(data.error ?? "No se pudo subir la imagen.");
+        return;
+      }
+
+      form.setFieldValue("image_url", data.url);
+    } catch {
+      setImageUploadError("Error de red al subir la imagen.");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const uploadExtraImages = async (files: FileList | File[]) => {
+    const selectedFiles = Array.from(files);
+    if (selectedFiles.length === 0) return;
+
+    const validationError = selectedFiles
+      .map(validateImageFile)
+      .find((error): error is string => Boolean(error));
+
+    if (validationError) {
+      setExtraImagesUploadError(validationError);
+      return;
+    }
+
+    const currentUrls = parseImageUrlsInput(form.getFieldValue("image_urls"));
+    if (currentUrls.length + selectedFiles.length > MAX_EXTRA_IMAGES) {
+      setExtraImagesUploadError(`Máximo ${MAX_EXTRA_IMAGES} imágenes adicionales.`);
+      return;
+    }
+
+    setExtraImagesUploadError(null);
+    setIsUploadingExtraImages(true);
+
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of selectedFiles) {
+        const uploadBody = new FormData();
+        uploadBody.append("file", file);
+
+        const response = await fetch("/api/uploads/products", {
+          method: "POST",
+          body: uploadBody,
+        });
+        const data: { url?: string; error?: string } = await response.json();
+
+        if (!response.ok || !data.url) {
+          setExtraImagesUploadError(data.error ?? "No se pudo subir una de las imágenes.");
+          return;
+        }
+
+        uploadedUrls.push(data.url);
+      }
+
+      const merged = mergeUniqueUrls(form.getFieldValue("image_urls"), uploadedUrls);
+      form.setFieldValue("image_urls", merged);
+    } catch {
+      setExtraImagesUploadError("Error de red al subir imágenes.");
+    } finally {
+      setIsUploadingExtraImages(false);
     }
   };
 
@@ -543,9 +701,101 @@ export default function Products() {
               </form.Field>
               <form.Field name="image_url">
                 {(field) => (
-                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
+                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-start gap-2 sm:gap-4">
                     <Label htmlFor="image_url" className="sm:text-right">{t("imageUrlLabel")}</Label>
-                    <Input id="image_url" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} className="col-span-3" placeholder="https://..." />
+                    <div className="col-span-3 space-y-3">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => fileInputRef.current?.click()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            fileInputRef.current?.click();
+                          }
+                        }}
+                        onDragEnter={(event) => {
+                          event.preventDefault();
+                          setIsDropzoneActive(true);
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setIsDropzoneActive(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                            setIsDropzoneActive(false);
+                          }
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          setIsDropzoneActive(false);
+                          const file = event.dataTransfer.files?.[0];
+                          if (file) {
+                            void uploadImage(file);
+                          }
+                        }}
+                        className={`rounded-md border border-dashed p-3 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring ${
+                          isDropzoneActive ? "border-primary bg-primary/5" : "border-muted-foreground/40"
+                        }`}
+                      >
+                        <p className="font-medium">Arrastra y suelta una imagen aquí</p>
+                        <p className="text-muted-foreground">O haz clic en Examinar. Formatos: PNG, JPG o WEBP (máx. 5 MB).</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button type="button" variant="outline" size="sm" disabled={isUploadingImage}>
+                            {isUploadingImage ? "Subiendo..." : "Examinar"}
+                          </Button>
+                          {field.state.value ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={isUploadingImage}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                field.handleChange("");
+                                setImageUploadError(null);
+                              }}
+                            >
+                              Quitar
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) {
+                            void uploadImage(file);
+                          }
+                          event.target.value = "";
+                        }}
+                      />
+                      {imageUploadError ? <p className="text-xs text-destructive">{imageUploadError}</p> : null}
+                      {field.state.value ? (
+                        <div className="space-y-2">
+                          <img
+                            src={field.state.value}
+                            alt="Vista previa de imagen"
+                            className="h-28 w-28 rounded-md border object-cover"
+                          />
+                        </div>
+                      ) : null}
+                      <Input
+                        id="image_url"
+                        value={field.state.value}
+                        onChange={(e) => {
+                          field.handleChange(e.target.value);
+                          setImageUploadError(null);
+                        }}
+                        placeholder="https://... o /uploads/products/..."
+                      />
+                    </div>
                   </div>
                 )}
               </form.Field>
@@ -553,7 +803,91 @@ export default function Products() {
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-start gap-2 sm:gap-4">
                     <Label htmlFor="image_urls" className="sm:text-right pt-2">{t("imageUrlsLabel")}</Label>
-                    <Input id="image_urls" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} className="col-span-3" placeholder={t("imageUrlsPlaceholder")} />
+                    <div className="col-span-3 space-y-3">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => extraImagesInputRef.current?.click()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            extraImagesInputRef.current?.click();
+                          }
+                        }}
+                        onDragEnter={(event) => {
+                          event.preventDefault();
+                          setIsExtraDropzoneActive(true);
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setIsExtraDropzoneActive(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                            setIsExtraDropzoneActive(false);
+                          }
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          setIsExtraDropzoneActive(false);
+                          void uploadExtraImages(event.dataTransfer.files);
+                        }}
+                        className={`rounded-md border border-dashed p-3 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring ${
+                          isExtraDropzoneActive ? "border-primary bg-primary/5" : "border-muted-foreground/40"
+                        }`}
+                      >
+                        <p className="font-medium">Arrastra y suelta imágenes adicionales aquí</p>
+                        <p className="text-muted-foreground">O haz clic en Examinar. Formatos: PNG, JPG o WEBP (máx. 5 MB, hasta {MAX_EXTRA_IMAGES}).</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button type="button" variant="outline" size="sm" disabled={isUploadingExtraImages}>
+                            {isUploadingExtraImages ? "Subiendo..." : "Examinar"}
+                          </Button>
+                        </div>
+                      </div>
+                      <input
+                        ref={extraImagesInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp"
+                        multiple
+                        className="hidden"
+                        onChange={(event) => {
+                          const files = event.target.files;
+                          if (files) {
+                            void uploadExtraImages(files);
+                          }
+                          event.target.value = "";
+                        }}
+                      />
+                      {extraImagesUploadError ? <p className="text-xs text-destructive">{extraImagesUploadError}</p> : null}
+                      {parseImageUrlsInput(field.state.value).length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                          {parseImageUrlsInput(field.state.value).map((url) => (
+                            <div key={url} className="relative rounded-md border p-1">
+                              <img
+                                src={url}
+                                alt="Vista previa de imagen adicional"
+                                className="h-20 w-full rounded object-cover"
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="mt-1 w-full"
+                                onClick={() => {
+                                  const nextRaw = removeUrlFromRaw(field.state.value, url);
+                                  field.handleChange(nextRaw);
+                                  setExtraImagesUploadError(null);
+                                }}
+                              >
+                                Quitar
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <Input id="image_urls" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} className="col-span-3" placeholder={t("imageUrlsPlaceholder")} />
+                    </div>
                   </div>
                 )}
               </form.Field>
