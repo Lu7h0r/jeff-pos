@@ -1866,7 +1866,7 @@ export default function POSPage() {
                 items={paymentMethods}
                 placeholder={t("paymentMethod")}
                 onSelect={(id) =>
-                  setQuickServiceForm((prev) => ({ ...prev, paymentMethodId: id }))
+                  setQuickServiceForm((prev) => ({ ...prev, paymentMethodId: String(id) }))
                 }
               />
               <p className="text-xs text-muted-foreground">
