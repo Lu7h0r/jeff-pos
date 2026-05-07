@@ -41,8 +41,8 @@ next-env.d.ts
 # pglite local database
 /data/pglite
 
-# drizzle migrations
-/drizzle
+# drizzle: keep versioned migrations, ignore push-generated artifacts
+/drizzle/snapshots
 
 # playwright mcp
 .playwright-mcp/

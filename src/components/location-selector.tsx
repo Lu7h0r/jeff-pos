@@ -26,7 +26,11 @@ function readCookie(): number | null {
 }
 
 function writeCookie(id: number): void {
-  document.cookie = `${COOKIE_KEY}=${id}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
+  // Secure flag is required by browsers when SameSite=None and is harmless on
+  // SameSite=Lax; we add it whenever the page is served over HTTPS so the
+  // cookie behaves correctly in production.
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${COOKIE_KEY}=${id}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
 }
 
 export function LocationSelector() {

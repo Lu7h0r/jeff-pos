@@ -1,9 +1,28 @@
 node_modules
 .next
 data/pglite
-drizzle
+
+# We DO want /drizzle/migrations inside the image (runtime migrator needs it).
+# Only ignore push-time snapshots that live outside.
+drizzle/snapshots
+
 .env
 .env*.local
 .git
+.github
 .claude
 .playwright-mcp
+
+# Markdown / docs not needed inside the image
+README*.md
+docs
+
+# Tests and dev-only fixtures
+**/__tests__
+**/*.test.ts
+coverage
+
+# Misc
+.DS_Store
+*.log
+*.tsbuildinfo

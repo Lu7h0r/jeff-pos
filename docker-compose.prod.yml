@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sanctum-postgres
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - sanctum_postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - sanctum_private_net
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sanctum-web:latest
+    container_name: sanctum-web
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sanctum_private_net
+    ports:
+      # Bind to loopback only — nginx on host reverse-proxies into here.
+      - "127.0.0.1:3201:3000"
+
+volumes:
+  sanctum_postgres_data:
+    driver: local
+
+networks:
+  sanctum_private_net:
+    driver: bridge

@@ -4,7 +4,8 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ["@electric-sql/pglite"],
+  output: "standalone",
+  serverExternalPackages: ["@electric-sql/pglite", "postgres"],
 };
 
 export default withNextIntl(nextConfig);
