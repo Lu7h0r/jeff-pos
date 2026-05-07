@@ -19,6 +19,12 @@ import {
   cashMovements,
   customers,
   staffMembers,
+  serviceAgreementMedia,
+  customerMessageConsents,
+  followUpOutboxEvents,
+  serviceAgreementConsumptionTemplates,
+  inventoryBalances,
+  inventoryMovements,
 } from "@/lib/db/schema";
 
 const agreementStatusSchema = z.enum(["active", "completed", "cancelled"]);
@@ -100,8 +106,128 @@ const agreementSessionWithCommissionSchema = z.object({
   commission: agreementCommissionSchema,
 });
 
+const consumptionTemplateSchema = z.object({
+  id: z.number(),
+  service_agreement_id: z.number(),
+  business_id: z.number(),
+  location_id: z.number(),
+  product_id: z.number(),
+  quantity_per_session: z.number(),
+  created_by_user_id: z.string(),
+  created_at: z.date().nullable(),
+  updated_at: z.date().nullable(),
+});
+
+const agreementMediaSchema = z.object({
+  id: z.number(),
+  service_agreement_id: z.number().nullable(),
+  service_agreement_session_id: z.number().nullable(),
+  business_id: z.number(),
+  location_id: z.number(),
+  media_url: z.string(),
+  media_kind: z.enum(["before", "after", "reference", "consent"]),
+  mime_type: z.string().nullable(),
+  size_bytes: z.number().nullable(),
+  caption: z.string().nullable(),
+  created_by_user_id: z.string(),
+  created_at: z.date().nullable(),
+});
+
+const customerConsentSchema = z.object({
+  id: z.number(),
+  customer_id: z.number(),
+  business_id: z.number(),
+  location_id: z.number().nullable(),
+  channel: z.enum(["whatsapp"]),
+  status: z.enum(["granted", "revoked"]),
+  source: z.string().nullable(),
+  notes: z.string().nullable(),
+  granted_at: z.date().nullable(),
+  revoked_at: z.date().nullable(),
+  created_by_user_id: z.string(),
+  created_at: z.date().nullable(),
+  updated_at: z.date().nullable(),
+});
+
+const outboxEventSchema = z.object({
+  id: z.number(),
+  business_id: z.number(),
+  location_id: z.number().nullable(),
+  customer_id: z.number().nullable(),
+  service_agreement_id: z.number().nullable(),
+  service_agreement_session_id: z.number().nullable(),
+  event_type: z.string(),
+  payload_json: z.string(),
+  status: z.enum(["pending", "processing", "dispatched", "failed"]),
+  attempts: z.number(),
+  next_attempt_at: z.date().nullable(),
+  dispatched_at: z.date().nullable(),
+  last_error: z.string().nullable(),
+  created_by_user_id: z.string(),
+  created_at: z.date().nullable(),
+  updated_at: z.date().nullable(),
+});
+
 function computeCommissionAmount(baseAmount: number, rateBps: number): number {
   return Math.floor((baseAmount * rateBps) / 10_000);
+}
+
+async function enqueueFollowUpEvent(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: {
+    customerId: number;
+    businessId: number;
+    locationId: number;
+    agreementId: number;
+    sessionId?: number;
+    eventType: "service_session_followup" | "service_payment_followup";
+    payload: Record<string, unknown>;
+    createdByUserId: string;
+  },
+) {
+  const [consent] = await tx
+    .select()
+    .from(customerMessageConsents)
+    .where(
+      and(
+        eq(customerMessageConsents.customer_id, input.customerId),
+        eq(customerMessageConsents.business_id, input.businessId),
+        eq(customerMessageConsents.channel, "whatsapp"),
+      ),
+    )
+    .orderBy(desc(customerMessageConsents.id))
+    .limit(1);
+
+  if (!consent || consent.status !== "granted") {
+    return;
+  }
+
+  const [customer] = await tx
+    .select({ phone: customers.phone })
+    .from(customers)
+    .where(eq(customers.id, input.customerId))
+    .limit(1);
+
+  if (!customer?.phone) {
+    return;
+  }
+
+  await tx.insert(followUpOutboxEvents).values({
+    business_id: input.businessId,
+    location_id: input.locationId,
+    customer_id: input.customerId,
+    service_agreement_id: input.agreementId,
+    service_agreement_session_id: input.sessionId ?? null,
+    event_type: input.eventType,
+    payload_json: JSON.stringify({
+      ...input.payload,
+      channel: "whatsapp",
+      customerPhone: customer.phone,
+    }),
+    status: "pending",
+    attempts: 0,
+    created_by_user_id: input.createdByUserId,
+  });
 }
 
 async function assertMembership(userId: string, businessId: number) {
@@ -343,6 +469,23 @@ export const serviceAgreementsRouter = router({
           })
           .returning();
 
+        if (agreement.customer_id != null) {
+          await enqueueFollowUpEvent(tx, {
+            customerId: agreement.customer_id,
+            businessId: agreement.business_id,
+            locationId: agreement.location_id,
+            agreementId: agreement.id,
+            sessionId: session.id,
+            eventType: "service_session_followup",
+            payload: {
+              sessionId: session.id,
+              scheduledFor: session.scheduled_for?.toISOString() ?? null,
+              serviceName: agreement.service_name,
+            },
+            createdByUserId: ctx.user.id,
+          });
+        }
+
         return {
           session: {
             ...session,
@@ -405,6 +548,97 @@ export const serviceAgreementsRouter = router({
       }));
     }),
 
+  setConsumptionTemplate: operationalRole
+    .input(
+      z.object({
+        agreementId: z.number().int().positive(),
+        items: z
+          .array(
+            z.object({
+              productId: z.number().int().positive(),
+              quantityPerSession: z.number().int().positive(),
+            }),
+          )
+          .max(50),
+      }),
+    )
+    .output(z.array(consumptionTemplateSchema))
+    .mutation(async ({ ctx, input }) => {
+      const [agreement] = await db
+        .select()
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.id, input.agreementId))
+        .limit(1);
+      if (!agreement) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agreement not found" });
+      }
+
+      await assertMembership(ctx.user.id, agreement.business_id);
+      assertLocationAllowed(ctx, agreement.location_id);
+
+      const uniqueProductIds = [...new Set(input.items.map((item) => item.productId))];
+      if (uniqueProductIds.length !== input.items.length) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Template cannot contain duplicate products",
+        });
+      }
+
+      if (uniqueProductIds.length > 0) {
+        const validProducts = await db
+          .select({ id: inventoryBalances.product_id })
+          .from(inventoryBalances)
+          .where(
+            and(
+              eq(inventoryBalances.business_id, agreement.business_id),
+              eq(inventoryBalances.location_id, agreement.location_id),
+              inArray(inventoryBalances.product_id, uniqueProductIds),
+            ),
+          );
+        const validIds = new Set(validProducts.map((row) => row.id));
+        const missing = uniqueProductIds.find((id) => !validIds.has(id));
+        if (missing != null) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Every template product must have an inventory balance in the agreement location",
+          });
+        }
+      }
+
+      return await db.transaction(async (tx) => {
+        await tx
+          .delete(serviceAgreementConsumptionTemplates)
+          .where(
+            eq(
+              serviceAgreementConsumptionTemplates.service_agreement_id,
+              agreement.id,
+            ),
+          );
+
+        if (input.items.length === 0) {
+          return [];
+        }
+
+        const inserted = await tx
+          .insert(serviceAgreementConsumptionTemplates)
+          .values(
+            input.items.map((item) => ({
+              service_agreement_id: agreement.id,
+              business_id: agreement.business_id,
+              location_id: agreement.location_id,
+              product_id: item.productId,
+              quantity_per_session: item.quantityPerSession,
+              created_by_user_id: ctx.user.id,
+              updated_at: new Date(),
+            })),
+          )
+          .returning();
+
+        return inserted;
+      });
+    }),
+
   updateSessionStatus: operationalRole
     .input(
       z.object({
@@ -426,14 +660,84 @@ export const serviceAgreementsRouter = router({
       await assertMembership(ctx.user.id, session.business_id);
       assertLocationAllowed(ctx, session.location_id);
 
-      const [updated] = await db
-        .update(serviceAgreementSessions)
-        .set({
-          status: input.status,
-          updated_at: sql`NOW()`,
-        })
-        .where(eq(serviceAgreementSessions.id, session.id))
-        .returning();
+      const shouldConsumeInventory =
+        input.status === "completed" && session.status !== "completed";
+
+      const [updated] = await db.transaction(async (tx) => {
+        if (shouldConsumeInventory) {
+          const templates = await tx
+            .select()
+            .from(serviceAgreementConsumptionTemplates)
+            .where(
+              eq(
+                serviceAgreementConsumptionTemplates.service_agreement_id,
+                session.service_agreement_id,
+              ),
+            );
+
+          if (templates.length > 0) {
+            const productIds = templates.map((item) => item.product_id);
+            const balances = await tx
+              .select()
+              .from(inventoryBalances)
+              .where(
+                and(
+                  eq(inventoryBalances.business_id, session.business_id),
+                  eq(inventoryBalances.location_id, session.location_id),
+                  inArray(inventoryBalances.product_id, productIds),
+                ),
+              );
+
+            const balanceByProductId = new Map(
+              balances.map((balance) => [balance.product_id, balance]),
+            );
+
+            for (const template of templates) {
+              const balance = balanceByProductId.get(template.product_id);
+              if (!balance || balance.quantity_on_hand < template.quantity_per_session) {
+                throw new TRPCError({
+                  code: "CONFLICT",
+                  message:
+                    "Insufficient stock to complete session: template consumption exceeds available inventory",
+                });
+              }
+            }
+
+            for (const template of templates) {
+              const balance = balanceByProductId.get(template.product_id)!;
+              await tx
+                .update(inventoryBalances)
+                .set({
+                  quantity_on_hand:
+                    balance.quantity_on_hand - template.quantity_per_session,
+                  updated_at: new Date(),
+                })
+                .where(eq(inventoryBalances.id, balance.id));
+
+              await tx.insert(inventoryMovements).values({
+                business_id: session.business_id,
+                location_id: session.location_id,
+                product_id: template.product_id,
+                quantity_delta: -template.quantity_per_session,
+                type: "internal_consumption",
+                source_type: "service_agreement_session",
+                source_id: session.id,
+                created_by_user_id: ctx.user.id,
+                notes: `Auto consumption for agreement ${session.service_agreement_id}, session ${session.id}`,
+              });
+            }
+          }
+        }
+
+        return await tx
+          .update(serviceAgreementSessions)
+          .set({
+            status: input.status,
+            updated_at: sql`NOW()`,
+          })
+          .where(eq(serviceAgreementSessions.id, session.id))
+          .returning();
+      });
 
       return {
         ...updated,
@@ -687,11 +991,254 @@ export const serviceAgreementsRouter = router({
           .where(eq(serviceAgreements.id, agreement.id))
           .returning();
 
+        if (agreement.customer_id != null) {
+          await enqueueFollowUpEvent(tx, {
+            customerId: agreement.customer_id,
+            businessId: agreement.business_id,
+            locationId: agreement.location_id,
+            agreementId: agreement.id,
+            eventType: "service_payment_followup",
+            payload: {
+              paymentTotal,
+              pendingAmount: pending,
+              status: nextStatus,
+              serviceName: agreement.service_name,
+            },
+            createdByUserId: ctx.user.id,
+          });
+        }
+
         return {
           ...updatedAgreement,
           status: agreementStatusSchema.parse(updatedAgreement.status),
           payments: insertedAgreementPayments,
         };
       });
+    }),
+
+  attachMedia: operationalRole
+    .input(
+      z.object({
+        agreementId: z.number().int().positive(),
+        sessionId: z.number().int().positive().optional(),
+        mediaUrl: z.string().trim().min(1),
+        mediaKind: z.enum(["before", "after", "reference", "consent"]),
+        mimeType: z.string().optional(),
+        sizeBytes: z.number().int().positive().optional(),
+        caption: z.string().optional(),
+      }),
+    )
+    .output(agreementMediaSchema)
+    .mutation(async ({ ctx, input }) => {
+      const [agreement] = await db
+        .select()
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.id, input.agreementId))
+        .limit(1);
+      if (!agreement) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agreement not found" });
+      }
+      await assertMembership(ctx.user.id, agreement.business_id);
+      assertLocationAllowed(ctx, agreement.location_id);
+
+      if (input.sessionId !== undefined) {
+        const [session] = await db
+          .select()
+          .from(serviceAgreementSessions)
+          .where(eq(serviceAgreementSessions.id, input.sessionId))
+          .limit(1);
+        if (!session || session.service_agreement_id !== agreement.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+        }
+      }
+
+      const [media] = await db
+        .insert(serviceAgreementMedia)
+        .values({
+          service_agreement_id: agreement.id,
+          service_agreement_session_id: input.sessionId ?? null,
+          business_id: agreement.business_id,
+          location_id: agreement.location_id,
+          media_url: input.mediaUrl,
+          media_kind: input.mediaKind,
+          mime_type: input.mimeType ?? null,
+          size_bytes: input.sizeBytes ?? null,
+          caption: input.caption ?? null,
+          created_by_user_id: ctx.user.id,
+        })
+        .returning();
+
+      return {
+        ...media,
+        media_kind: agreementMediaSchema.shape.media_kind.parse(media.media_kind),
+      };
+    }),
+
+  listMedia: protectedProcedure
+    .input(
+      z.object({
+        agreementId: z.number().int().positive(),
+        sessionId: z.number().int().positive().optional(),
+      }),
+    )
+    .output(z.array(agreementMediaSchema))
+    .query(async ({ ctx, input }) => {
+      const [agreement] = await db
+        .select()
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.id, input.agreementId))
+        .limit(1);
+      if (!agreement) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agreement not found" });
+      }
+      await assertMembership(ctx.user.id, agreement.business_id);
+      assertLocationAllowed(ctx, agreement.location_id);
+
+      const rows = await db
+        .select()
+        .from(serviceAgreementMedia)
+        .where(
+          input.sessionId !== undefined
+            ? and(
+                eq(serviceAgreementMedia.service_agreement_id, agreement.id),
+                eq(serviceAgreementMedia.service_agreement_session_id, input.sessionId),
+              )
+            : eq(serviceAgreementMedia.service_agreement_id, agreement.id),
+        )
+        .orderBy(desc(serviceAgreementMedia.id));
+
+      return rows.map((row) => ({
+        ...row,
+        media_kind: agreementMediaSchema.shape.media_kind.parse(row.media_kind),
+      }));
+    }),
+
+  upsertCustomerConsent: operationalRole
+    .input(
+      z.object({
+        customerId: z.number().int().positive(),
+        locationId: z.number().int().positive().optional(),
+        status: z.enum(["granted", "revoked"]),
+        source: z.string().optional(),
+        notes: z.string().optional(),
+      }),
+    )
+    .output(customerConsentSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.activeBusinessId == null) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "An active business is required",
+        });
+      }
+
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, input.customerId))
+        .limit(1);
+
+      if (!customer || customer.business_id !== ctx.activeBusinessId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Customer not found" });
+      }
+
+      if (input.locationId !== undefined) {
+        assertLocationAllowed(ctx, input.locationId);
+      }
+
+      const now = new Date();
+      const [created] = await db
+        .insert(customerMessageConsents)
+        .values({
+          customer_id: customer.id,
+          business_id: ctx.activeBusinessId,
+          location_id: input.locationId ?? null,
+          channel: "whatsapp",
+          status: input.status,
+          source: input.source ?? null,
+          notes: input.notes ?? null,
+          granted_at: input.status === "granted" ? now : null,
+          revoked_at: input.status === "revoked" ? now : null,
+          created_by_user_id: ctx.user.id,
+        })
+        .returning();
+
+      return {
+        ...created,
+        channel: customerConsentSchema.shape.channel.parse(created.channel),
+        status: customerConsentSchema.shape.status.parse(created.status),
+      };
+    }),
+
+  getCustomerConsent: protectedProcedure
+    .input(z.object({ customerId: z.number().int().positive() }))
+    .output(customerConsentSchema.nullable())
+    .query(async ({ ctx, input }) => {
+      if (ctx.activeBusinessId == null) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "An active business is required",
+        });
+      }
+
+      const [consent] = await db
+        .select()
+        .from(customerMessageConsents)
+        .where(
+          and(
+            eq(customerMessageConsents.customer_id, input.customerId),
+            eq(customerMessageConsents.business_id, ctx.activeBusinessId),
+            eq(customerMessageConsents.channel, "whatsapp"),
+          ),
+        )
+        .orderBy(desc(customerMessageConsents.id))
+        .limit(1);
+
+      if (!consent) return null;
+      if (consent.location_id != null) {
+        assertLocationAllowed(ctx, consent.location_id);
+      }
+
+      return {
+        ...consent,
+        channel: customerConsentSchema.shape.channel.parse(consent.channel),
+        status: customerConsentSchema.shape.status.parse(consent.status),
+      };
+    }),
+
+  listOutboxEvents: protectedProcedure
+    .input(
+      z.object({
+        status: z.enum(["pending", "processing", "dispatched", "failed"]).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      }),
+    )
+    .output(z.array(outboxEventSchema))
+    .query(async ({ ctx, input }) => {
+      if (ctx.activeBusinessId == null) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "An active business is required",
+        });
+      }
+
+      const rows = await db
+        .select()
+        .from(followUpOutboxEvents)
+        .where(
+          input.status
+            ? and(
+                eq(followUpOutboxEvents.business_id, ctx.activeBusinessId),
+                eq(followUpOutboxEvents.status, input.status),
+              )
+            : eq(followUpOutboxEvents.business_id, ctx.activeBusinessId),
+        )
+        .orderBy(desc(followUpOutboxEvents.id))
+        .limit(input.limit ?? 50);
+
+      return rows.map((row) => ({
+        ...row,
+        status: outboxEventSchema.shape.status.parse(row.status),
+      }));
     }),
 });

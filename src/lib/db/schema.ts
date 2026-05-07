@@ -283,6 +283,31 @@ export const serviceAgreementCommissions = pgTable(
   },
 );
 
+export const serviceAgreementConsumptionTemplates = pgTable(
+  "service_agreement_consumption_templates",
+  {
+    id: serial("id").primaryKey(),
+    service_agreement_id: integer("service_agreement_id")
+      .notNull()
+      .references(() => serviceAgreements.id),
+    business_id: integer("business_id")
+      .notNull()
+      .references(() => businesses.id),
+    location_id: integer("location_id")
+      .notNull()
+      .references(() => locations.id),
+    product_id: integer("product_id")
+      .notNull()
+      .references(() => products.id),
+    quantity_per_session: integer("quantity_per_session").notNull(),
+    created_by_user_id: text("created_by_user_id")
+      .notNull()
+      .references(() => user.id),
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+  },
+);
+
 export const serviceAgreementPayments = pgTable("service_agreement_payments", {
   id: serial("id").primaryKey(),
   service_agreement_id: integer("service_agreement_id")
@@ -303,6 +328,80 @@ export const serviceAgreementPayments = pgTable("service_agreement_payments", {
     .references(() => user.id),
   notes: text("notes"),
   created_at: timestamp("created_at").defaultNow(),
+});
+
+export const serviceAgreementMedia = pgTable("service_agreement_media", {
+  id: serial("id").primaryKey(),
+  service_agreement_id: integer("service_agreement_id").references(
+    () => serviceAgreements.id,
+  ),
+  service_agreement_session_id: integer("service_agreement_session_id").references(
+    () => serviceAgreementSessions.id,
+  ),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  media_url: text("media_url").notNull(),
+  media_kind: varchar("media_kind", { length: 20 }).notNull().default("reference"),
+  mime_type: varchar("mime_type", { length: 100 }),
+  size_bytes: integer("size_bytes"),
+  caption: text("caption"),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const customerMessageConsents = pgTable("customer_message_consents", {
+  id: serial("id").primaryKey(),
+  customer_id: integer("customer_id")
+    .notNull()
+    .references(() => customers.id),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id").references(() => locations.id),
+  channel: varchar("channel", { length: 20 }).notNull().default("whatsapp"),
+  status: varchar("status", { length: 20 }).notNull().default("granted"),
+  source: varchar("source", { length: 50 }),
+  notes: text("notes"),
+  granted_at: timestamp("granted_at"),
+  revoked_at: timestamp("revoked_at"),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+export const followUpOutboxEvents = pgTable("follow_up_outbox_events", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id").references(() => locations.id),
+  customer_id: integer("customer_id").references(() => customers.id),
+  service_agreement_id: integer("service_agreement_id").references(
+    () => serviceAgreements.id,
+  ),
+  service_agreement_session_id: integer("service_agreement_session_id").references(
+    () => serviceAgreementSessions.id,
+  ),
+  event_type: varchar("event_type", { length: 50 }).notNull(),
+  payload_json: text("payload_json").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  next_attempt_at: timestamp("next_attempt_at"),
+  dispatched_at: timestamp("dispatched_at"),
+  last_error: text("last_error"),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
 });
 
 // ── Relations ───────────────────────────────────────────────────────────────
@@ -372,6 +471,7 @@ export const serviceAgreementsRelations = relations(
     payments: many(serviceAgreementPayments),
     sessions: many(serviceAgreementSessions),
     commissions: many(serviceAgreementCommissions),
+    consumptionTemplates: many(serviceAgreementConsumptionTemplates),
   }),
 );
 
@@ -432,6 +532,32 @@ export const serviceAgreementCommissionsRelations = relations(
   }),
 );
 
+export const serviceAgreementConsumptionTemplatesRelations = relations(
+  serviceAgreementConsumptionTemplates,
+  ({ one }) => ({
+    agreement: one(serviceAgreements, {
+      fields: [serviceAgreementConsumptionTemplates.service_agreement_id],
+      references: [serviceAgreements.id],
+    }),
+    business: one(businesses, {
+      fields: [serviceAgreementConsumptionTemplates.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [serviceAgreementConsumptionTemplates.location_id],
+      references: [locations.id],
+    }),
+    product: one(products, {
+      fields: [serviceAgreementConsumptionTemplates.product_id],
+      references: [products.id],
+    }),
+    createdBy: one(user, {
+      fields: [serviceAgreementConsumptionTemplates.created_by_user_id],
+      references: [user.id],
+    }),
+  }),
+);
+
 export const serviceAgreementPaymentsRelations = relations(
   serviceAgreementPayments,
   ({ one }) => ({
@@ -453,6 +579,84 @@ export const serviceAgreementPaymentsRelations = relations(
     }),
     createdBy: one(user, {
       fields: [serviceAgreementPayments.created_by_user_id],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const serviceAgreementMediaRelations = relations(
+  serviceAgreementMedia,
+  ({ one }) => ({
+    agreement: one(serviceAgreements, {
+      fields: [serviceAgreementMedia.service_agreement_id],
+      references: [serviceAgreements.id],
+    }),
+    session: one(serviceAgreementSessions, {
+      fields: [serviceAgreementMedia.service_agreement_session_id],
+      references: [serviceAgreementSessions.id],
+    }),
+    business: one(businesses, {
+      fields: [serviceAgreementMedia.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [serviceAgreementMedia.location_id],
+      references: [locations.id],
+    }),
+    createdBy: one(user, {
+      fields: [serviceAgreementMedia.created_by_user_id],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const customerMessageConsentsRelations = relations(
+  customerMessageConsents,
+  ({ one }) => ({
+    customer: one(customers, {
+      fields: [customerMessageConsents.customer_id],
+      references: [customers.id],
+    }),
+    business: one(businesses, {
+      fields: [customerMessageConsents.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [customerMessageConsents.location_id],
+      references: [locations.id],
+    }),
+    createdBy: one(user, {
+      fields: [customerMessageConsents.created_by_user_id],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const followUpOutboxEventsRelations = relations(
+  followUpOutboxEvents,
+  ({ one }) => ({
+    business: one(businesses, {
+      fields: [followUpOutboxEvents.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [followUpOutboxEvents.location_id],
+      references: [locations.id],
+    }),
+    customer: one(customers, {
+      fields: [followUpOutboxEvents.customer_id],
+      references: [customers.id],
+    }),
+    agreement: one(serviceAgreements, {
+      fields: [followUpOutboxEvents.service_agreement_id],
+      references: [serviceAgreements.id],
+    }),
+    session: one(serviceAgreementSessions, {
+      fields: [followUpOutboxEvents.service_agreement_session_id],
+      references: [serviceAgreementSessions.id],
+    }),
+    createdBy: one(user, {
+      fields: [followUpOutboxEvents.created_by_user_id],
       references: [user.id],
     }),
   }),

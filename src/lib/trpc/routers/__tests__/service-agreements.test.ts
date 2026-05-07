@@ -24,6 +24,8 @@ let pmOtherBizId: number;
 let openSessionId: number;
 let staffJeffId: number;
 let staffOtherId: number;
+let inkProductId: number;
+let needleProductId: number;
 
 beforeAll(async () => {
   await pg.exec(SCHEMA_DDL);
@@ -65,6 +67,7 @@ beforeAll(async () => {
     .values({
       name: "Cliente Tatuaje",
       email: "cliente-tatuaje@test.com",
+      phone: "+573001112233",
       user_uid: "u-jeff",
       business_id: bizJeffId,
     })
@@ -106,6 +109,51 @@ beforeAll(async () => {
     .returning();
   staffJeffId = staffJeff.id;
   staffOtherId = staffOther.id;
+
+  const [inkProduct, needleProduct] = await db
+    .insert(schema.products)
+    .values([
+      {
+        name: "Tinta negra",
+        description: "Insumo tatuaje",
+        price: 0,
+        in_stock: 0,
+        user_uid: "u-jeff",
+        business_id: bizJeffId,
+        status: "active",
+        kind: "product",
+      },
+      {
+        name: "Aguja cartucho",
+        description: "Insumo tatuaje",
+        price: 0,
+        in_stock: 0,
+        user_uid: "u-jeff",
+        business_id: bizJeffId,
+        status: "active",
+        kind: "product",
+      },
+    ])
+    .returning();
+  inkProductId = inkProduct.id;
+  needleProductId = needleProduct.id;
+
+  await db.insert(schema.inventoryBalances).values([
+    {
+      business_id: bizJeffId,
+      location_id: amparoId,
+      product_id: inkProductId,
+      quantity_on_hand: 10,
+      quantity_reserved: 0,
+    },
+    {
+      business_id: bizJeffId,
+      location_id: amparoId,
+      product_id: needleProductId,
+      quantity_on_hand: 2,
+      quantity_reserved: 0,
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -362,6 +410,113 @@ describe("serviceAgreements — fase 2 sesiones + comisiones", () => {
   });
 });
 
+describe("serviceAgreements — fase 3 consumo de insumos", () => {
+  it("consumes stock and writes traceable inventory movements when session is completed", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      serviceName: "Tattoo consumo",
+      totalAgreedAmount: 350_000,
+    });
+
+    await jeffCaller().setConsumptionTemplate({
+      agreementId: agreement.id,
+      items: [
+        { productId: inkProductId, quantityPerSession: 3 },
+        { productId: needleProductId, quantityPerSession: 1 },
+      ],
+    });
+
+    const { session } = await jeffCaller().createSession({
+      agreementId: agreement.id,
+      staffMemberId: staffJeffId,
+      scheduledFor: new Date("2026-05-15T14:00:00.000Z"),
+      sessionAmount: 120_000,
+    });
+
+    await jeffCaller().updateSessionStatus({
+      sessionId: session.id,
+      status: "completed",
+    });
+
+    const [inkBalance] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(eq(schema.inventoryBalances.product_id, inkProductId));
+    const [needleBalance] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(eq(schema.inventoryBalances.product_id, needleProductId));
+
+    expect(inkBalance.quantity_on_hand).toBe(7);
+    expect(needleBalance.quantity_on_hand).toBe(1);
+
+    const movements = await db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(eq(schema.inventoryMovements.source_id, session.id));
+
+    expect(movements.length).toBe(2);
+    expect(movements.every((row) => row.source_type === "service_agreement_session")).toBe(
+      true,
+    );
+    expect(movements.every((row) => row.created_by_user_id === "u-jeff")).toBe(true);
+  });
+
+  it("blocks completion when template consumption exceeds stock and stays atomic", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      serviceName: "Tattoo sin stock",
+      totalAgreedAmount: 260_000,
+    });
+
+    await jeffCaller().setConsumptionTemplate({
+      agreementId: agreement.id,
+      items: [{ productId: needleProductId, quantityPerSession: 5 }],
+    });
+
+    const { session } = await jeffCaller().createSession({
+      agreementId: agreement.id,
+      staffMemberId: staffJeffId,
+      scheduledFor: new Date("2026-05-16T14:00:00.000Z"),
+      sessionAmount: 90_000,
+    });
+
+    const [before] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(eq(schema.inventoryBalances.product_id, needleProductId));
+
+    await expect(
+      jeffCaller().updateSessionStatus({
+        sessionId: session.id,
+        status: "completed",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message:
+        "Insufficient stock to complete session: template consumption exceeds available inventory",
+    });
+
+    const [after] = await db
+      .select()
+      .from(schema.inventoryBalances)
+      .where(eq(schema.inventoryBalances.id, before.id));
+    expect(after.quantity_on_hand).toBe(before.quantity_on_hand);
+
+    const movementRows = await db
+      .select()
+      .from(schema.inventoryMovements)
+      .where(eq(schema.inventoryMovements.source_id, session.id));
+    expect(movementRows.length).toBe(0);
+
+    const [sessionAfter] = await db
+      .select()
+      .from(schema.serviceAgreementSessions)
+      .where(eq(schema.serviceAgreementSessions.id, session.id));
+    expect(sessionAfter.status).toBe("scheduled");
+  });
+});
+
 describe("serviceAgreements — fase 2 (prep tests)", () => {
   it.todo(
     "creates and lists multiple service sessions per agreement once session model exists",
@@ -378,4 +533,90 @@ describe("serviceAgreements — fase 2 (prep tests)", () => {
   it.todo(
     "rejects invalid session operations (duplicate invalid, agreement completed/cancelled)",
   );
+});
+
+describe("serviceAgreements — fase 4 media + consentimiento + outbox", () => {
+  it("attaches and lists media for agreement/session", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      customerId,
+      serviceName: "Tattoo media",
+      totalAgreedAmount: 400_000,
+    });
+
+    const { session } = await jeffCaller().createSession({
+      agreementId: agreement.id,
+      staffMemberId: staffJeffId,
+      scheduledFor: new Date("2026-05-20T14:00:00.000Z"),
+      sessionAmount: 200_000,
+    });
+
+    await jeffCaller().attachMedia({
+      agreementId: agreement.id,
+      sessionId: session.id,
+      mediaUrl: "https://cdn.test/foto-1.jpg",
+      mediaKind: "before",
+      mimeType: "image/jpeg",
+      sizeBytes: 1024,
+    });
+
+    const rows = await jeffCaller().listMedia({
+      agreementId: agreement.id,
+      sessionId: session.id,
+    });
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.media_kind).toBe("before");
+  });
+
+  it("stores consent and only enqueues outbox when consent is granted", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      customerId,
+      serviceName: "Tattoo outbox consent",
+      totalAgreedAmount: 500_000,
+    });
+
+    await jeffCaller().upsertCustomerConsent({
+      customerId,
+      locationId: amparoId,
+      status: "revoked",
+      source: "counter",
+    });
+
+    const before = await db
+      .select()
+      .from(schema.followUpOutboxEvents)
+      .where(eq(schema.followUpOutboxEvents.service_agreement_id, agreement.id));
+
+    await jeffCaller().addPayment({
+      agreementId: agreement.id,
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 30_000 }],
+    });
+
+    const afterRevoked = await db
+      .select()
+      .from(schema.followUpOutboxEvents)
+      .where(eq(schema.followUpOutboxEvents.service_agreement_id, agreement.id));
+    expect(afterRevoked.length).toBe(before.length);
+
+    await jeffCaller().upsertCustomerConsent({
+      customerId,
+      locationId: amparoId,
+      status: "granted",
+      source: "counter",
+    });
+
+    await jeffCaller().addPayment({
+      agreementId: agreement.id,
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 20_000 }],
+    });
+
+    const afterGranted = await db
+      .select()
+      .from(schema.followUpOutboxEvents)
+      .where(eq(schema.followUpOutboxEvents.service_agreement_id, agreement.id));
+
+    expect(afterGranted.length).toBeGreaterThan(afterRevoked.length);
+    expect(afterGranted.at(-1)?.status).toBe("pending");
+  });
 });
