@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -128,6 +128,10 @@ type QuickServiceForm = {
   initialPayment: string;
   paymentMethodId: string;
   notes: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  whatsappConsent: "none" | "granted" | "revoked";
 };
 
 type PosSessionForm = {
@@ -145,6 +149,14 @@ type AgreementMediaForm = {
   mediaKind: AgreementMediaKind;
   caption: string;
 };
+
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+]);
 
 function readLocationCookie(): number | null {
   if (typeof document === "undefined") return null;
@@ -259,6 +271,14 @@ export default function POSPage() {
     trpc.serviceAgreements.create.mutationOptions(),
   );
 
+  const createCustomerMutation = useMutation(
+    trpc.customers.create.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.customers.list.queryOptions());
+      },
+    }),
+  );
+
   const addServiceAgreementPaymentMutation = useMutation(
     trpc.serviceAgreements.addPayment.mutationOptions(),
   );
@@ -293,6 +313,10 @@ export default function POSPage() {
     initialPayment: "",
     paymentMethodId: "",
     notes: "",
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    whatsappConsent: "none",
   });
   const [quickServiceErrors, setQuickServiceErrors] = useState<
     Partial<Record<keyof QuickServiceForm, string>>
@@ -319,6 +343,14 @@ export default function POSPage() {
     mediaKind: "reference",
     caption: "",
   });
+  const [isUploadingAgreementMedia, setIsUploadingAgreementMedia] = useState(false);
+  const [isAgreementMediaDropzoneActive, setIsAgreementMediaDropzoneActive] =
+    useState(false);
+  const [agreementMediaUploadError, setAgreementMediaUploadError] = useState<string | null>(
+    null,
+  );
+  const [lastAgreementMediaFile, setLastAgreementMediaFile] = useState<File | null>(null);
+  const agreementMediaInputRef = useRef<HTMLInputElement | null>(null);
 
   const sessionsQuery = useQuery({
     ...trpc.serviceAgreements.listSessions.queryOptions({
@@ -531,6 +563,53 @@ export default function POSPage() {
     updateSessionStatusMutation.mutate({ sessionId, status: "completed" });
   };
 
+  const validateAgreementMediaFile = (file: File): string | null => {
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+      return t("agreementMediaUploadValidationType");
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      return t("agreementMediaUploadValidationSize");
+    }
+    return null;
+  };
+
+  const uploadAgreementMediaFile = async (file: File) => {
+    const validationError = validateAgreementMediaFile(file);
+    if (validationError) {
+      setAgreementMediaUploadError(validationError);
+      return;
+    }
+
+    setAgreementMediaUploadError(null);
+    setIsUploadingAgreementMedia(true);
+    setLastAgreementMediaFile(file);
+
+    try {
+      const uploadBody = new FormData();
+      uploadBody.append("file", file);
+
+      const response = await fetch("/api/uploads/products", {
+        method: "POST",
+        body: uploadBody,
+      });
+      const data: { url?: string; error?: string } = await response.json();
+
+      if (!response.ok || !data.url) {
+        setAgreementMediaUploadError(
+          data.error ?? t("agreementMediaUploadErrorGeneric"),
+        );
+        return;
+      }
+
+      const uploadedUrl = data.url;
+      setMediaForm((prev) => ({ ...prev, mediaUrl: uploadedUrl }));
+    } catch {
+      setAgreementMediaUploadError(t("agreementMediaUploadErrorNetwork"));
+    } finally {
+      setIsUploadingAgreementMedia(false);
+    }
+  };
+
   const submitAgreementMedia = () => {
     if (selectedAgreementId == null) {
       toast.error(t("agreementMediaValidationAgreement"));
@@ -551,16 +630,17 @@ export default function POSPage() {
   };
 
   const updateWhatsAppConsent = (status: "granted" | "revoked") => {
-    if (selectedAgreement?.customer_id == null) {
+    const consentCustomerId = selectedAgreement?.customer_id ?? selectedCustomerId;
+    if (consentCustomerId == null) {
       toast.error(t("consentNoCustomer"));
       return;
     }
 
     upsertConsentMutation.mutate({
-      customerId: selectedAgreement.customer_id,
+      customerId: consentCustomerId,
       locationId: locationId ?? undefined,
       status,
-      source: "pos",
+      source: "pos_services_panel",
       notes: t("consentSourcePos"),
     });
   };
@@ -869,6 +949,7 @@ export default function POSPage() {
 
   const openQuickServiceModal = () => {
     setQuickServiceErrors({});
+    setAgreementMediaUploadError(null);
     setQuickServiceForm((prev) => ({
       ...prev,
       artistId: "",
@@ -878,6 +959,10 @@ export default function POSPage() {
       initialPayment: "",
       paymentMethodId: "",
       notes: "",
+      customerName: selectedCustomer?.name ?? "",
+      customerPhone: selectedCustomer?.phone ?? "",
+      customerEmail: selectedCustomer?.email ?? "",
+      whatsappConsent: "none",
     }));
     setQuickServiceOpen(true);
   };
@@ -886,6 +971,9 @@ export default function POSPage() {
     const nextErrors: Partial<Record<keyof QuickServiceForm, string>> = {};
     const totalAgreedAmount = Math.floor(Number(quickServiceForm.totalAgreedAmount) || 0);
     const initialPayment = Math.floor(Number(quickServiceForm.initialPayment) || 0);
+    const trimmedCustomerName = quickServiceForm.customerName.trim();
+    const trimmedCustomerPhone = quickServiceForm.customerPhone.trim();
+    const trimmedCustomerEmail = quickServiceForm.customerEmail.trim();
 
     if (!quickServiceForm.artistId) {
       nextErrors.artistId = t("quickServiceValidationArtist");
@@ -905,6 +993,16 @@ export default function POSPage() {
     if (initialPayment > 0 && !quickServiceForm.paymentMethodId) {
       nextErrors.paymentMethodId = t("quickServiceValidationPaymentMethod");
     }
+    if (
+      selectedCustomerId == null &&
+      !trimmedCustomerName &&
+      (trimmedCustomerPhone || trimmedCustomerEmail)
+    ) {
+      nextErrors.customerName = t("quickServiceValidationCustomerName");
+    }
+    if (trimmedCustomerEmail && !/^\S+@\S+\.\S+$/.test(trimmedCustomerEmail)) {
+      nextErrors.customerEmail = t("quickServiceValidationCustomerEmail");
+    }
 
     if (Object.keys(nextErrors).length > 0) {
       setQuickServiceErrors(nextErrors);
@@ -915,6 +1013,18 @@ export default function POSPage() {
     setQuickServiceSubmitting(true);
 
     try {
+      let agreementCustomerId: number | undefined = selectedCustomerId ?? undefined;
+      if (agreementCustomerId == null && trimmedCustomerName && trimmedCustomerEmail) {
+        const createdCustomer = await createCustomerMutation.mutateAsync({
+          name: trimmedCustomerName,
+          email: trimmedCustomerEmail,
+          phone: trimmedCustomerPhone || undefined,
+          status: "active",
+        });
+        agreementCustomerId = createdCustomer.id;
+        setSelectedCustomerId(createdCustomer.id);
+      }
+
       const artist = (staffQuery.data ?? []).find(
         (s) => s.id === Number(quickServiceForm.artistId),
       );
@@ -929,11 +1039,21 @@ export default function POSPage() {
 
       const created = await createServiceAgreementMutation.mutateAsync({
         locationId: locationId!,
-        customerId: selectedCustomerId ?? undefined,
+        customerId: agreementCustomerId,
         serviceName,
         totalAgreedAmount,
         notes: composedNotes || undefined,
       });
+
+      if (agreementCustomerId != null && quickServiceForm.whatsappConsent !== "none") {
+        await upsertConsentMutation.mutateAsync({
+          customerId: agreementCustomerId,
+          locationId: locationId ?? undefined,
+          status: quickServiceForm.whatsappConsent,
+          source: "pos_quick_service_modal",
+          notes: t("consentSourcePos"),
+        });
+      }
 
       const withPayment =
         initialPayment > 0
@@ -1575,13 +1695,123 @@ export default function POSPage() {
               </div>
               <div className="grid gap-1">
                 <Label>{t("agreementMediaUrlLabel")}</Label>
-                <Input
-                  value={mediaForm.mediaUrl}
-                  onChange={(e) =>
-                    setMediaForm((prev) => ({ ...prev, mediaUrl: e.target.value }))
-                  }
-                  placeholder={t("agreementMediaUrlPlaceholder")}
-                />
+                <div className="space-y-2">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => agreementMediaInputRef.current?.click()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        agreementMediaInputRef.current?.click();
+                      }
+                    }}
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      setIsAgreementMediaDropzoneActive(true);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setIsAgreementMediaDropzoneActive(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                        setIsAgreementMediaDropzoneActive(false);
+                      }
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setIsAgreementMediaDropzoneActive(false);
+                      const file = event.dataTransfer.files?.[0];
+                      if (file) {
+                        void uploadAgreementMediaFile(file);
+                      }
+                    }}
+                    className={`rounded-md border border-dashed p-3 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring ${
+                      isAgreementMediaDropzoneActive
+                        ? "border-primary bg-primary/5"
+                        : "border-muted-foreground/40"
+                    }`}
+                  >
+                    <p className="font-medium">{t("agreementMediaUploadDropzoneTitle")}</p>
+                    <p className="text-muted-foreground">
+                      {t("agreementMediaUploadDropzoneHint")}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isUploadingAgreementMedia}
+                      >
+                        {isUploadingAgreementMedia
+                          ? t("agreementMediaUploadUploading")
+                          : t("agreementMediaUploadBrowse")}
+                      </Button>
+                      {mediaForm.mediaUrl ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={isUploadingAgreementMedia}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setMediaForm((prev) => ({ ...prev, mediaUrl: "" }));
+                            setAgreementMediaUploadError(null);
+                          }}
+                        >
+                          {t("agreementMediaUploadRemove")}
+                        </Button>
+                      ) : null}
+                      {lastAgreementMediaFile ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={isUploadingAgreementMedia}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void uploadAgreementMediaFile(lastAgreementMediaFile);
+                          }}
+                        >
+                          {t("agreementMediaUploadRetry")}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <input
+                    ref={agreementMediaInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        void uploadAgreementMediaFile(file);
+                      }
+                      event.target.value = "";
+                    }}
+                  />
+                  {agreementMediaUploadError ? (
+                    <p className="text-xs text-destructive">{agreementMediaUploadError}</p>
+                  ) : null}
+                  {mediaForm.mediaUrl ? (
+                    <img
+                      src={mediaForm.mediaUrl}
+                      alt={t("agreementMediaUploadPreviewAlt")}
+                      className="h-28 w-28 rounded-md border object-cover"
+                    />
+                  ) : null}
+                  <Input
+                    value={mediaForm.mediaUrl}
+                    onChange={(e) => {
+                      setMediaForm((prev) => ({ ...prev, mediaUrl: e.target.value }));
+                      setAgreementMediaUploadError(null);
+                    }}
+                    placeholder={t("agreementMediaUrlPlaceholder")}
+                  />
+                </div>
               </div>
               <div className="grid gap-1">
                 <Label>{t("agreementMediaCaptionLabel")}</Label>
@@ -1764,9 +1994,83 @@ export default function POSPage() {
           <div className="grid gap-3 py-2">
             <div className="grid gap-1">
               <Label>{t("quickServiceCustomer")}</Label>
-              <p className="text-sm text-muted-foreground">
-                {selectedCustomer ? selectedCustomer.name : t("walkIn")}
-              </p>
+              {selectedCustomer ? (
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground space-y-1">
+                  <p className="font-medium text-foreground">{selectedCustomer.name}</p>
+                  {selectedCustomer.phone ? <p>{selectedCustomer.phone}</p> : null}
+                  {selectedCustomer.email ? <p>{selectedCustomer.email}</p> : null}
+                </div>
+              ) : (
+                <>
+                  <Input
+                    value={quickServiceForm.customerName}
+                    onChange={(e) =>
+                      setQuickServiceForm((prev) => ({
+                        ...prev,
+                        customerName: e.target.value,
+                      }))
+                    }
+                    placeholder={t("quickServiceCustomerNamePlaceholder")}
+                  />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1">
+                      <Label>{t("quickServiceCustomerPhone")}</Label>
+                      <Input
+                        value={quickServiceForm.customerPhone}
+                        onChange={(e) =>
+                          setQuickServiceForm((prev) => ({
+                            ...prev,
+                            customerPhone: e.target.value,
+                          }))
+                        }
+                        placeholder={t("quickServiceCustomerPhonePlaceholder")}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label>{t("quickServiceCustomerEmail")}</Label>
+                      <Input
+                        value={quickServiceForm.customerEmail}
+                        onChange={(e) =>
+                          setQuickServiceForm((prev) => ({
+                            ...prev,
+                            customerEmail: e.target.value,
+                          }))
+                        }
+                        placeholder={t("quickServiceCustomerEmailPlaceholder")}
+                      />
+                      {quickServiceErrors.customerEmail ? (
+                        <p className="text-xs text-destructive">{quickServiceErrors.customerEmail}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t("quickServiceCustomerHint")}</p>
+                  {quickServiceErrors.customerName ? (
+                    <p className="text-xs text-destructive">{quickServiceErrors.customerName}</p>
+                  ) : null}
+                </>
+              )}
+            </div>
+            <div className="grid gap-1">
+              <Label>{t("quickServiceConsentLabel")}</Label>
+              <Select
+                value={quickServiceForm.whatsappConsent}
+                onValueChange={(value) =>
+                  setQuickServiceForm((prev) => ({
+                    ...prev,
+                    whatsappConsent: value as "none" | "granted" | "revoked",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("quickServiceConsentNone")}</SelectItem>
+                  <SelectItem value="granted">{t("quickServiceConsentGranted")}</SelectItem>
+                  <SelectItem value="revoked">{t("quickServiceConsentRevoked")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("quickServiceConsentHint")}</p>
             </div>
             <div className="grid gap-1">
               <Label>{t("staff")}</Label>
