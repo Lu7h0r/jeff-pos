@@ -1,0 +1,2591 @@
+[
+  {
+    "rawLine": "- 2 hemp wraps 2 hemp wraps $ 5.000 $ 2.200 1 $ 2.800 56%",
+    "name": "2 hemp wraps",
+    "normalizedName": "2 hemp wraps",
+    "price": 5000,
+    "cost": 2200,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Adorno cartílago Adorno cartílago $ 10.000 $ 5.000 5 $ 5.000 50%",
+    "name": "Adorno cartílago",
+    "normalizedName": "adorno cartilago",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 5,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 05 RM Aguja convencional 05 RM $ 2.000 $ 0 49 $ 2.000 100%",
+    "name": "Aguja convencional 05 RM",
+    "normalizedName": "aguja convencional 05 rm",
+    "price": 2000,
+    "cost": 0,
+    "quantity": 49,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 13 RL Aguja convencional 13 RL $ 2.000 $ 0 50 $ 2.000 100%",
+    "name": "Aguja convencional 13 RL",
+    "normalizedName": "aguja convencional 13 rl",
+    "price": 2000,
+    "cost": 0,
+    "quantity": 50,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 13RS Aguja convencional 13RS $ 2.000 $ 0 44 $ 2.000 100%",
+    "name": "Aguja convencional 13RS",
+    "normalizedName": "aguja convencional 13rs",
+    "price": 2000,
+    "cost": 0,
+    "quantity": 44,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 15 RL Aguja convencional 15 RL $ 2.000 $ 800 14 $ 1.200 60%",
+    "name": "Aguja convencional 15 RL",
+    "normalizedName": "aguja convencional 15 rl",
+    "price": 2000,
+    "cost": 800,
+    "quantity": 14,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 15 RM Aguja convencional 15 RM $ 2.000 $ 0 7 $ 2.000 100%",
+    "name": "Aguja convencional 15 RM",
+    "normalizedName": "aguja convencional 15 rm",
+    "price": 2000,
+    "cost": 0,
+    "quantity": 7,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencíonal 3Rl Aguja convencíonal 3Rl $ 2.000 $ 800 6 $ 1.200 60%",
+    "name": "Aguja convencíonal 3Rl",
+    "normalizedName": "aguja convencional 3rl",
+    "price": 2000,
+    "cost": 800,
+    "quantity": 6,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 5Rl Aguja convencional 5Rl $ 2.000 $ 800 -1 $ 1.200 60%",
+    "name": "Aguja convencional 5Rl",
+    "normalizedName": "aguja convencional 5rl",
+    "price": 2000,
+    "cost": 800,
+    "quantity": 0,
+    "category": "Aguja Convencional",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Aguja convencional 7Rl Aguja convencional 7Rl $ 2.000 $ 800 6 $ 1.200 60%",
+    "name": "Aguja convencional 7Rl",
+    "normalizedName": "aguja convencional 7rl",
+    "price": 2000,
+    "cost": 800,
+    "quantity": 6,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 9Rl Aguja convencional 9Rl $ 2.000 $ 800 14 $ 1.200 60%",
+    "name": "Aguja convencional 9Rl",
+    "normalizedName": "aguja convencional 9rl",
+    "price": 2000,
+    "cost": 800,
+    "quantity": 14,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional 9RM Aguja convencional 9RM $ 2.000 $ 0 43 $ 2.000 100%",
+    "name": "Aguja convencional 9RM",
+    "normalizedName": "aguja convencional 9rm",
+    "price": 2000,
+    "cost": 0,
+    "quantity": 43,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aguja convencional REF 7RM Aguja convencional REF 7RM $ 2.000 $ 0 51 $ 2.000 100%",
+    "name": "Aguja convencional REF 7RM",
+    "normalizedName": "aguja convencional ref 7rm",
+    "price": 2000,
+    "cost": 0,
+    "quantity": 51,
+    "category": "Aguja Convencional",
+    "issues": []
+  },
+  {
+    "rawLine": "- Alíen puf Alíen puf $ 6.500 $ 3.000 2 $ 3.500 54%",
+    "name": "Alíen puf",
+    "normalizedName": "alien puf",
+    "price": 6500,
+    "cost": 3000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Alíen puff cellulose Alíen puff cellulose $ 7.500 $ 3.000 4 $ 4.500 60%",
+    "name": "Alíen puff cellulose",
+    "normalizedName": "alien puff cellulose",
+    "price": 7500,
+    "cost": 3000,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Antialérgico Antialérgico $ 12.000 $ 6.000 2 $ 6.000 50%",
+    "name": "Antialérgico",
+    "normalizedName": "antialergico",
+    "price": 12000,
+    "cost": 6000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aretes fantasía circon Aretes fantasía circon $ 6.000 $ 2.500 15 $ 3.500 58%",
+    "name": "Aretes fantasía circon",
+    "normalizedName": "aretes fantasia circon",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 15,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Armados Armados $ 1.000 $ 0 -3 $ 1.000 100%",
+    "name": "Armados",
+    "normalizedName": "armados",
+    "price": 1000,
+    "cost": 0,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Aro continuo azul Aro continuo azul $ 5.000 $ 1.500 6 $ 3.500 70%",
+    "name": "Aro continuo azul",
+    "normalizedName": "aro continuo azul",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 6,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo brass Aro continuo brass $ 15.000 $ 7.000 2 $ 8.000 53%",
+    "name": "Aro continuo brass",
+    "normalizedName": "aro continuo brass",
+    "price": 15000,
+    "cost": 7000,
+    "quantity": 2,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo de figuras surtido Aro continuo de figuras surtido $ 25.000 $ 15.000 3 $ 10.000 40%",
+    "name": "Aro continuo de figuras surtido",
+    "normalizedName": "aro continuo de figuras surtido",
+    "price": 25000,
+    "cost": 15000,
+    "quantity": 3,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo de lujo Aro continuo de lujo $ 15.000 $ 5.000 9 $ 10.000 67%",
+    "name": "Aro continuo de lujo",
+    "normalizedName": "aro continuo de lujo",
+    "price": 15000,
+    "cost": 5000,
+    "quantity": 9,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo dorado Aro continuo dorado $ 5.000 $ 1.500 18 $ 3.500 70%",
+    "name": "Aro continuo dorado",
+    "normalizedName": "aro continuo dorado",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 18,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo morado Aro continuo morado $ 5.000 $ 1.500 5 $ 3.500 70%",
+    "name": "Aro continuo morado",
+    "normalizedName": "aro continuo morado",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 5,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo negro Aro continuo negro $ 5.000 $ 1.500 24 $ 3.500 70%",
+    "name": "Aro continuo negro",
+    "normalizedName": "aro continuo negro",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 24,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo plateado Aro continuo plateado $ 5.000 $ 1.500 13 $ 3.500 70%",
+    "name": "Aro continuo plateado",
+    "normalizedName": "aro continuo plateado",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 13,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo surtido circón Aro continuo surtido circón $ 20.000 $ 10.000 8 $ 10.000 50%",
+    "name": "Aro continuo surtido circón",
+    "normalizedName": "aro continuo surtido circon",
+    "price": 20000,
+    "cost": 10000,
+    "quantity": 8,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro continuo tornasol Aro continuo tornasol $ 5.000 $ 1.500 19 $ 3.500 70%",
+    "name": "Aro continuo tornasol",
+    "normalizedName": "aro continuo tornasol",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 19,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Aro de lujo en fantasía Aro de lujo en fantasía $ 5.000 $ 1.500 52 $ 3.500 70%",
+    "name": "Aro de lujo en fantasía",
+    "normalizedName": "aro de lujo en fantasia",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 52,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bala bodega Bala bodega $ 5.000 $ 1.500 1 $ 3.500 70%",
+    "name": "Bala bodega",
+    "normalizedName": "bala bodega",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bala grande Bala grande $ 15.000 $ 8.000 1 $ 7.000 47%",
+    "name": "Bala grande",
+    "normalizedName": "bala grande",
+    "price": 15000,
+    "cost": 8000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bala metálica Bala metálica $ 11.000 $ 5.000 0 $ 6.000 55%",
+    "name": "Bala metálica",
+    "normalizedName": "bala metalica",
+    "price": 11000,
+    "cost": 5000,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Balones x2 Balones x2 $ 2.000 $ 1.500 2 $ 500 25%",
+    "name": "Balones x2",
+    "normalizedName": "balones x2",
+    "price": 2000,
+    "cost": 1500,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Banana blanca Banana blanca $ 2.000 $ 400 0 $ 1.600 80%",
+    "name": "Banana blanca",
+    "normalizedName": "banana blanca",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Banana de lujo Banana de lujo $ 6.000 $ 3.000 0 $ 3.000 50%",
+    "name": "Banana de lujo",
+    "normalizedName": "banana de lujo",
+    "price": 6000,
+    "cost": 3000,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Banana dorada Banana dorada $ 2.000 $ 400 73 $ 1.600 80%",
+    "name": "Banana dorada",
+    "normalizedName": "banana dorada",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 73,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Banana negra Banana negra $ 2.000 $ 400 40 $ 1.600 80%",
+    "name": "Banana negra",
+    "normalizedName": "banana negra",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 40,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Banana plateada Banana plateada $ 2.000 $ 400 15 $ 1.600 80%",
+    "name": "Banana plateada",
+    "normalizedName": "banana plateada",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 15,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Banana surtida de lujo Banana surtida de lujo $ 8.000 $ 4.000 0 $ 4.000 50%",
+    "name": "Banana surtida de lujo",
+    "normalizedName": "banana surtida de lujo",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Banana tornasol Banana tornasol $ 2.000 $ 400 12 $ 1.600 80%",
+    "name": "Banana tornasol",
+    "normalizedName": "banana tornasol",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 12,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Barra de lujo Barra de lujo $ 15.000 $ 6.000 7 $ 9.000 60%",
+    "name": "Barra de lujo",
+    "normalizedName": "barra de lujo",
+    "price": 15000,
+    "cost": 6000,
+    "quantity": 7,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Barra en punta de lujo Barra en punta de lujo $ 5.000 $ 1.000 3 $ 4.000 80%",
+    "name": "Barra en punta de lujo",
+    "normalizedName": "barra en punta de lujo",
+    "price": 5000,
+    "cost": 1000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bate 4 rayas grande Bate 4 rayas grande $ 9.000 $ 4.000 0 $ 5.000 56%",
+    "name": "Bate 4 rayas grande",
+    "normalizedName": "bate 4 rayas grande",
+    "price": 9000,
+    "cost": 4000,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bate 4 rayas pequeño Bate 4 rayas pequeño $ 5.000 $ 2.000 1 $ 3.000 60%",
+    "name": "Bate 4 rayas pequeño",
+    "normalizedName": "bate 4 rayas pequeno",
+    "price": 5000,
+    "cost": 2000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bate clásico 4 rayas Bate clásico 4 rayas $ 7.000 $ 3.000 11 $ 4.000 57%",
+    "name": "Bate clásico 4 rayas",
+    "normalizedName": "bate clasico 4 rayas",
+    "price": 7000,
+    "cost": 3000,
+    "quantity": 11,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Batería de CBD Batería de CBD $ 30.000 $ 15.000 3 $ 15.000 50%",
+    "name": "Batería de CBD",
+    "normalizedName": "bateria de cbd",
+    "price": 30000,
+    "cost": 15000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Baterías genérica Baterías genérica $ 34.000 $ 17.000 3 $ 17.000 50%",
+    "name": "Baterías genérica",
+    "normalizedName": "baterias generica",
+    "price": 34000,
+    "cost": 17000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bete metálico diseños Bete metálico diseños $ 8.000 $ 4.000 3 $ 4.000 50%",
+    "name": "Bete metálico diseños",
+    "normalizedName": "bete metalico disenos",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bioflex Bioflex $ 5.000 $ 1.500 18 $ 3.500 70%",
+    "name": "Bioflex",
+    "normalizedName": "bioflex",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 18,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Blunt warp x2 Blunt warp x2 $ 6.000 $ 2.000 8 $ 4.000 67%",
+    "name": "Blunt warp x2",
+    "normalizedName": "blunt warp x2",
+    "price": 6000,
+    "cost": 2000,
+    "quantity": 8,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bodega madera Bodega madera $ 16.000 $ 7.000 1 $ 9.000 56%",
+    "name": "Bodega madera",
+    "normalizedName": "bodega madera",
+    "price": 16000,
+    "cost": 7000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bolas de fuego Bolas de fuego $ 5.000 $ 2.500 7 $ 2.500 50%",
+    "name": "Bolas de fuego",
+    "normalizedName": "bolas de fuego",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 7,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bolsa x100 CAPS Bolsa x100 CAPS $ 10.000 $ 5.000 5 $ 5.000 50%",
+    "name": "Bolsa x100 CAPS",
+    "normalizedName": "bolsa x100 caps",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 5,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bones x5 Bones x5 $ 4.000 $ 1.800 1 $ 2.200 55%",
+    "name": "Bones x5",
+    "normalizedName": "bones x5",
+    "price": 4000,
+    "cost": 1800,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Bong Bong $ 16.000 $ 7.500 2 $ 8.500 53%",
+    "name": "Bong",
+    "normalizedName": "bong",
+    "price": 16000,
+    "cost": 7500,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Buln rose Buln rose $ 16.000 $ 8.000 1 $ 8.000 50%",
+    "name": "Buln rose",
+    "normalizedName": "buln rose",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Busco media cremallera Busco media cremallera $ 90.000 $ 45.000 1 $ 45.000 50%",
+    "name": "Busco media cremallera",
+    "normalizedName": "busco media cremallera",
+    "price": 90000,
+    "cost": 45000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Buso capotero cremallera Buso capotero cremallera $ 150.000 $ 90.000 1 $ 60.000 40%",
+    "name": "Buso capotero cremallera",
+    "normalizedName": "buso capotero cremallera",
+    "price": 150000,
+    "cost": 90000,
+    "quantity": 1,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- C-thru cellulose C-thru cellulose $ 4.000 $ 2.000 2 $ 2.000 50%",
+    "name": "C-thru cellulose",
+    "normalizedName": "c thru cellulose",
+    "price": 4000,
+    "cost": 2000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Caja de cartuchos surtida Caja de cartuchos surtida $ 80.000 $ 50.000 2 $ 30.000 38%",
+    "name": "Caja de cartuchos surtida",
+    "normalizedName": "caja de cartuchos surtida",
+    "price": 80000,
+    "cost": 50000,
+    "quantity": 2,
+    "category": "Caja De Cartuchos",
+    "issues": []
+  },
+  {
+    "rawLine": "- calavera acrílico BONG calavera acrílico BONG $ 28.000 $ 11.000 1 $ 17.000 61%",
+    "name": "calavera acrílico BONG",
+    "normalizedName": "calavera acrilico bong",
+    "price": 28000,
+    "cost": 11000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Calcas Calcas $ 3.000 $ 0 0 $ 3.000 100%",
+    "name": "Calcas",
+    "normalizedName": "calcas",
+    "price": 3000,
+    "cost": 0,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Camisa acid wash Camisa acid wash $ 80.000 $ 40.000 1 $ 40.000 50%",
+    "name": "Camisa acid wash",
+    "normalizedName": "camisa acid wash",
+    "price": 80000,
+    "cost": 40000,
+    "quantity": 1,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Camisa algodón perchado Camisa algodón perchado $ 45.000 $ 20.000 1 $ 25.000 56%",
+    "name": "Camisa algodón perchado",
+    "normalizedName": "camisa algodon perchado",
+    "price": 45000,
+    "cost": 20000,
+    "quantity": 1,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Camisa sublimada Camisa sublimada $ 40.000 $ 20.000 3 $ 20.000 50%",
+    "name": "Camisa sublimada",
+    "normalizedName": "camisa sublimada",
+    "price": 40000,
+    "cost": 20000,
+    "quantity": 3,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Camisa tekila Camisa tekila $ 70.000 $ 35.000 2 $ 35.000 50%",
+    "name": "Camisa tekila",
+    "normalizedName": "camisa tekila",
+    "price": 70000,
+    "cost": 35000,
+    "quantity": 2,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Camiseta oversai Camiseta oversai $ 50.000 $ 25.000 6 $ 25.000 50%",
+    "name": "Camiseta oversai",
+    "normalizedName": "camiseta oversai",
+    "price": 50000,
+    "cost": 25000,
+    "quantity": 6,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Candonga con circon negra Candonga con circon negra $ 8.000 $ 3.000 6 $ 5.000 63%",
+    "name": "Candonga con circon negra",
+    "normalizedName": "candonga con circon negra",
+    "price": 8000,
+    "cost": 3000,
+    "quantity": 6,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Candonga con circon plateada por par Candonga con circon plateada por par $ 8.000 $ 3.000 6 $ 5.000 63%",
+    "name": "Candonga con circon plateada por par",
+    "normalizedName": "candonga con circon plateada por par",
+    "price": 8000,
+    "cost": 3000,
+    "quantity": 6,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Candonga de lujo und Candonga de lujo und $ 7.500 $ 3.500 1 $ 4.000 53%",
+    "name": "Candonga de lujo und",
+    "normalizedName": "candonga de lujo und",
+    "price": 7500,
+    "cost": 3500,
+    "quantity": 1,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Candonga liza negra par Candonga liza negra par $ 5.000 $ 1.650 12 $ 3.350 67%",
+    "name": "Candonga liza negra par",
+    "normalizedName": "candonga liza negra par",
+    "price": 5000,
+    "cost": 1650,
+    "quantity": 12,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Candonga liza plateada por par Candonga liza plateada por par $ 5.000 $ 1.650 10 $ 3.350 67%",
+    "name": "Candonga liza plateada por par",
+    "normalizedName": "candonga liza plateada por par",
+    "price": 5000,
+    "cost": 1650,
+    "quantity": 10,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Candonga pesa Candonga pesa $ 8.000 $ 4.000 3 $ 4.000 50%",
+    "name": "Candonga pesa",
+    "normalizedName": "candonga pesa",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 3,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Candongas Candongas $ 8.000 $ 4.000 5 $ 4.000 50%",
+    "name": "Candongas",
+    "normalizedName": "candongas",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 5,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Caracola grandes Caracola grandes $ 9.000 $ 4.500 0 $ 4.500 50%",
+    "name": "Caracola grandes",
+    "normalizedName": "caracola grandes",
+    "price": 9000,
+    "cost": 4500,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Caracola pequeñas Caracola pequeñas $ 3.500 $ 7.000 0 -$ 3.500 -100%",
+    "name": "Caracola pequeñas",
+    "normalizedName": "caracola pequenas",
+    "price": 3500,
+    "cost": 3500,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": [
+      "cost_greater_than_price_clamped"
+    ]
+  },
+  {
+    "rawLine": "- Cartucho 5rm Cartucho 5rm $ 6.000 $ 2.500 13 $ 3.500 58%",
+    "name": "Cartucho 5rm",
+    "normalizedName": "cartucho 5rm",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 13,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 1 RL Cartucho premiun ref 1 RL $ 6.000 $ 2.500 5 $ 3.500 58%",
+    "name": "Cartucho premiun ref 1 RL",
+    "normalizedName": "cartucho premiun ref 1 rl",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 5,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 11RL Cartucho premiun ref 11RL $ 6.000 $ 2.500 19 $ 3.500 58%",
+    "name": "Cartucho premiun ref 11RL",
+    "normalizedName": "cartucho premiun ref 11rl",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 19,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 11RM Cartucho premiun ref 11RM $ 6.000 $ 2.500 2 $ 3.500 58%",
+    "name": "Cartucho premiun ref 11RM",
+    "normalizedName": "cartucho premiun ref 11rm",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 2,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 13 RM Cartucho premiun ref 13 RM $ 6.000 $ 2.500 3 $ 3.500 58%",
+    "name": "Cartucho premiun ref 13 RM",
+    "normalizedName": "cartucho premiun ref 13 rm",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 3,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 15RL Cartucho premiun ref 15RL $ 6.000 $ 2.500 11 $ 3.500 58%",
+    "name": "Cartucho premiun ref 15RL",
+    "normalizedName": "cartucho premiun ref 15rl",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 11,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 19RM Cartucho premiun ref 19RM $ 6.000 $ 2.500 0 $ 3.500 58%",
+    "name": "Cartucho premiun ref 19RM",
+    "normalizedName": "cartucho premiun ref 19rm",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 0,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 23RM Cartucho premiun ref 23RM $ 6.000 $ 2.500 5 $ 3.500 58%",
+    "name": "Cartucho premiun ref 23RM",
+    "normalizedName": "cartucho premiun ref 23rm",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 5,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 3RL Cartucho premiun ref 3RL $ 6.000 $ 2.500 18 $ 3.500 58%",
+    "name": "Cartucho premiun ref 3RL",
+    "normalizedName": "cartucho premiun ref 3rl",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 18,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 5RL Cartucho premiun ref 5RL $ 6.000 $ 2.500 8 $ 3.500 58%",
+    "name": "Cartucho premiun ref 5RL",
+    "normalizedName": "cartucho premiun ref 5rl",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 8,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 7 RS Cartucho premiun ref 7 RS $ 6.000 $ 2.500 2 $ 3.500 58%",
+    "name": "Cartucho premiun ref 7 RS",
+    "normalizedName": "cartucho premiun ref 7 rs",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 2,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 7RL Cartucho premiun ref 7RL $ 6.000 $ 2.500 -1 $ 3.500 58%",
+    "name": "Cartucho premiun ref 7RL",
+    "normalizedName": "cartucho premiun ref 7rl",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 0,
+    "category": "Insumos de tattoo",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 9RL Cartucho premiun ref 9RL $ 6.000 $ 2.500 -4 $ 3.500 58%",
+    "name": "Cartucho premiun ref 9RL",
+    "normalizedName": "cartucho premiun ref 9rl",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 0,
+    "category": "Insumos de tattoo",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 9RM Cartucho premiun ref 9RM $ 6.000 $ 2.500 15 $ 3.500 58%",
+    "name": "Cartucho premiun ref 9RM",
+    "normalizedName": "cartucho premiun ref 9rm",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 15,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho premiun ref 9RS Cartucho premiun ref 9RS $ 6.000 $ 2.500 1 $ 3.500 58%",
+    "name": "Cartucho premiun ref 9RS",
+    "normalizedName": "cartucho premiun ref 9rs",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 1,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho ref M1 surtida Cartucho ref M1 surtida $ 6.000 $ 2.500 6 $ 3.500 58%",
+    "name": "Cartucho ref M1 surtida",
+    "normalizedName": "cartucho ref m1 surtida",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 6,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cartucho referencia 143RM Cartucho referencia 143RM $ 30.000 $ 15.000 1 $ 15.000 50%",
+    "name": "Cartucho referencia 143RM",
+    "normalizedName": "cartucho referencia 143rm",
+    "price": 30000,
+    "cost": 15000,
+    "quantity": 1,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cenicero de vidrio Cenicero de vidrio $ 18.000 $ 6.000 1 $ 12.000 67%",
+    "name": "Cenicero de vidrio",
+    "normalizedName": "cenicero de vidrio",
+    "price": 18000,
+    "cost": 6000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cenicero de vidrio cuadrado Cenicero de vidrio cuadrado $ 20.000 $ 6.000 1 $ 14.000 70%",
+    "name": "Cenicero de vidrio cuadrado",
+    "normalizedName": "cenicero de vidrio cuadrado",
+    "price": 20000,
+    "cost": 6000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Centro de lengua acrílico Centro de lengua acrílico $ 2.000 $ 2.500 9 -$ 500 -25%",
+    "name": "Centro de lengua acrílico",
+    "normalizedName": "centro de lengua acrilico",
+    "price": 2000,
+    "cost": 2000,
+    "quantity": 9,
+    "category": "Sin categoría",
+    "issues": [
+      "cost_greater_than_price_clamped"
+    ]
+  },
+  {
+    "rawLine": "- Centro de lengua básico Centro de lengua básico $ 2.000 $ 700 30 $ 1.300 65%",
+    "name": "Centro de lengua básico",
+    "normalizedName": "centro de lengua basico",
+    "price": 2000,
+    "cost": 700,
+    "quantity": 30,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Centro de lengua de lujo cápsula Centro de lengua de lujo cápsula $ 5.000 $ 2.500 8 $ 2.500 50%",
+    "name": "Centro de lengua de lujo cápsula",
+    "normalizedName": "centro de lengua de lujo capsula",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 8,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Centro de lengua lujo dados Centro de lengua lujo dados $ 8.000 $ 4.000 2 $ 4.000 50%",
+    "name": "Centro de lengua lujo dados",
+    "normalizedName": "centro de lengua lujo dados",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cinta cubre grip Cinta cubre grip $ 10.000 $ 5.000 2 $ 5.000 50%",
+    "name": "Cinta cubre grip",
+    "normalizedName": "cinta cubre grip",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 2,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Clíper recusable Clíper recusable $ 5.000 $ 2.000 6 $ 3.000 60%",
+    "name": "Clíper recusable",
+    "normalizedName": "cliper recusable",
+    "price": 5000,
+    "cost": 2000,
+    "quantity": 6,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Colgante de figuras surtidos por par Colgante de figuras surtidos por par $ 10.000 $ 4.000 9 $ 6.000 60%",
+    "name": "Colgante de figuras surtidos por par",
+    "normalizedName": "colgante de figuras surtidos por par",
+    "price": 10000,
+    "cost": 4000,
+    "quantity": 9,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Conjunto basket Conjunto basket $ 70.000 $ 32.000 2 $ 38.000 54%",
+    "name": "Conjunto basket",
+    "normalizedName": "conjunto basket",
+    "price": 70000,
+    "cost": 32000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Conos armados Conos armados $ 1.000 $ 100 91 $ 900 90%",
+    "name": "Conos armados",
+    "normalizedName": "conos armados",
+    "price": 1000,
+    "cost": 100,
+    "quantity": 91,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Convencional 11RL Convencional 11RL $ 2.000 $ 0 42 $ 2.000 100%",
+    "name": "Convencional 11RL",
+    "normalizedName": "convencional 11rl",
+    "price": 2000,
+    "cost": 0,
+    "quantity": 42,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Crema anestésica TKTX Crema anestésica TKTX $ 60.000 $ 22.000 4 $ 38.000 63%",
+    "name": "Crema anestésica TKTX",
+    "normalizedName": "crema anestesica tktx",
+    "price": 60000,
+    "cost": 22000,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Crema estencil protón Crema estencil protón $ 24.000 $ 12.000 -2 $ 12.000 50%",
+    "name": "Crema estencil protón",
+    "normalizedName": "crema estencil proton",
+    "price": 24000,
+    "cost": 12000,
+    "quantity": 0,
+    "category": "Insumos de tattoo",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Crema loe INK pos tattoo Crema loe INK pos tattoo $ 10.000 $ 0 3 $ 10.000 100%",
+    "name": "Crema loe INK pos tattoo",
+    "normalizedName": "crema loe ink pos tattoo",
+    "price": 10000,
+    "cost": 0,
+    "quantity": 3,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cuchara genérica Cuchara genérica $ 4.000 $ 1.600 3 $ 2.400 60%",
+    "name": "Cuchara genérica",
+    "normalizedName": "cuchara generica",
+    "price": 4000,
+    "cost": 1600,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cuchara premiun Cuchara premiun $ 8.000 $ 4.000 1 $ 4.000 50%",
+    "name": "Cuchara premiun",
+    "normalizedName": "cuchara premiun",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cuchara sniper Cuchara sniper $ 8.000 $ 3.000 0 $ 5.000 63%",
+    "name": "Cuchara sniper",
+    "normalizedName": "cuchara sniper",
+    "price": 8000,
+    "cost": 3000,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cucharas Cucharas $ 5.000 $ 1.500 1 $ 3.500 70%",
+    "name": "Cucharas",
+    "normalizedName": "cucharas",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Cueros celulosos rosa Cueros celulosos rosa $ 7.000 $ 3.500 1 $ 3.500 50%",
+    "name": "Cueros celulosos rosa",
+    "normalizedName": "cueros celulosos rosa",
+    "price": 7000,
+    "cost": 3500,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Death row vaper Death row vaper $ 20.000 $ 9.000 3 $ 11.000 55%",
+    "name": "Death row vaper",
+    "normalizedName": "death row vaper",
+    "price": 20000,
+    "cost": 9000,
+    "quantity": 3,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Enroladora acrílico Enroladora acrílico $ 8.000 $ 3.500 1 $ 4.500 56%",
+    "name": "Enroladora acrílico",
+    "normalizedName": "enroladora acrilico",
+    "price": 8000,
+    "cost": 3500,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Enroladoras acrilicas Enroladoras acrilicas $ 12.000 $ 6.000 1 $ 6.000 50%",
+    "name": "Enroladoras acrilicas",
+    "normalizedName": "enroladoras acrilicas",
+    "price": 12000,
+    "cost": 6000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Equator eq3000 vaper Equator eq3000 vaper $ 45.000 $ 22.000 0 $ 23.000 51%",
+    "name": "Equator eq3000 vaper",
+    "normalizedName": "equator eq3000 vaper",
+    "price": 45000,
+    "cost": 22000,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Espiral labio Espiral labio $ 2.500 $ 400 4 $ 2.100 84%",
+    "name": "Espiral labio",
+    "normalizedName": "espiral labio",
+    "price": 2500,
+    "cost": 400,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Espiral labio lujo Espiral labio lujo $ 5.000 $ 1.600 0 $ 3.400 68%",
+    "name": "Espiral labio lujo",
+    "normalizedName": "espiral labio lujo",
+    "price": 5000,
+    "cost": 1600,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión 3D und Expansión 3D und $ 25.000 $ 15.000 4 $ 10.000 40%",
+    "name": "Expansión 3D und",
+    "normalizedName": "expansion 3d und",
+    "price": 25000,
+    "cost": 15000,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión diseño#20 und Expansión diseño#20 und $ 15.000 $ 20.000 6 -$ 5.000 -33%",
+    "name": "Expansión diseño#20 und",
+    "normalizedName": "expansion diseno 20 und",
+    "price": 15000,
+    "cost": 15000,
+    "quantity": 6,
+    "category": "Sin categoría",
+    "issues": [
+      "cost_greater_than_price_clamped"
+    ]
+  },
+  {
+    "rawLine": "- Expansión goma#30 und Expansión goma#30 und $ 8.000 $ 3.000 5 $ 5.000 63%",
+    "name": "Expansión goma#30 und",
+    "normalizedName": "expansion goma 30 und",
+    "price": 8000,
+    "cost": 3000,
+    "quantity": 5,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión goma#34 und Expansión goma#34 und $ 9.000 $ 3.000 2 $ 6.000 67%",
+    "name": "Expansión goma#34 und",
+    "normalizedName": "expansion goma 34 und",
+    "price": 9000,
+    "cost": 3000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión lujo#10 und Expansión lujo#10 und $ 8.000 $ 3.500 2 $ 4.500 56%",
+    "name": "Expansión lujo#10 und",
+    "normalizedName": "expansion lujo 10 und",
+    "price": 8000,
+    "cost": 3500,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión resina#12 und Expansión resina#12 und $ 14.000 $ 7.000 3 $ 7.000 50%",
+    "name": "Expansión resina#12 und",
+    "normalizedName": "expansion resina 12 und",
+    "price": 14000,
+    "cost": 7000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión resina#14 und Expansión resina#14 und $ 15.000 $ 7.000 3 $ 8.000 53%",
+    "name": "Expansión resina#14 und",
+    "normalizedName": "expansion resina 14 und",
+    "price": 15000,
+    "cost": 7000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión secptum Expansión secptum $ 5.000 $ 2.500 3 $ 2.500 50%",
+    "name": "Expansión secptum",
+    "normalizedName": "expansion secptum",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión#10 und Expansión#10 und $ 4.000 $ 1.600 8 $ 2.400 60%",
+    "name": "Expansión#10 und",
+    "normalizedName": "expansion 10 und",
+    "price": 4000,
+    "cost": 1600,
+    "quantity": 8,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Expansión#12 und Expansión#12 und $ 5.000 $ 2.000 3 $ 3.000 60%",
+    "name": "Expansión#12 und",
+    "normalizedName": "expansion 12 und",
+    "price": 5000,
+    "cost": 2000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Filtros smoking Filtros smoking $ 200 $ 100 60 $ 100 50%",
+    "name": "Filtros smoking",
+    "normalizedName": "filtros smoking",
+    "price": 200,
+    "cost": 100,
+    "quantity": 60,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Filtros trofil Filtros trofil $ 2.500 $ 1.100 24 $ 1.400 56%",
+    "name": "Filtros trofil",
+    "normalizedName": "filtros trofil",
+    "price": 2500,
+    "cost": 1100,
+    "quantity": 24,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Five panel Five panel $ 80.000 $ 40.000 3 $ 40.000 50%",
+    "name": "Five panel",
+    "normalizedName": "five panel",
+    "price": 80000,
+    "cost": 40000,
+    "quantity": 3,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Gorila rolling stars Gorila rolling stars $ 8.000 $ 3.200 4 $ 4.800 60%",
+    "name": "Gorila rolling stars",
+    "normalizedName": "gorila rolling stars",
+    "price": 8000,
+    "cost": 3200,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Gorra genérica Gorra genérica $ 16.000 $ 8.000 12 $ 8.000 50%",
+    "name": "Gorra genérica",
+    "normalizedName": "gorra generica",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 12,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Gorra importada Gorra importada $ 46.000 $ 22.000 2 $ 24.000 52%",
+    "name": "Gorra importada",
+    "normalizedName": "gorra importada",
+    "price": 46000,
+    "cost": 22000,
+    "quantity": 2,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Gorro demental Gorro demental $ 20.000 $ 8.000 2 $ 12.000 60%",
+    "name": "Gorro demental",
+    "normalizedName": "gorro demental",
+    "price": 20000,
+    "cost": 8000,
+    "quantity": 2,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Gorros de lana Gorros de lana $ 25.000 $ 12.000 8 $ 13.000 52%",
+    "name": "Gorros de lana",
+    "normalizedName": "gorros de lana",
+    "price": 25000,
+    "cost": 12000,
+    "quantity": 8,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder 3p grande Grinder 3p grande $ 12.000 $ 6.000 2 $ 6.000 50%",
+    "name": "Grinder 3p grande",
+    "normalizedName": "grinder 3p grande",
+    "price": 12000,
+    "cost": 6000,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder acrílica Grinder acrílica $ 5.000 $ 2.500 2 $ 2.500 50%",
+    "name": "Grinder acrílica",
+    "normalizedName": "grinder acrilica",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder acrílica 2pisos Grinder acrílica 2pisos $ 7.000 $ 3.500 0 $ 3.500 50%",
+    "name": "Grinder acrílica 2pisos",
+    "normalizedName": "grinder acrilica 2pisos",
+    "price": 7000,
+    "cost": 3500,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder cubo Grinder cubo $ 7.000 $ 3.000 5 $ 4.000 57%",
+    "name": "Grinder cubo",
+    "normalizedName": "grinder cubo",
+    "price": 7000,
+    "cost": 3000,
+    "quantity": 5,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder de 3 pisos metálicas Grinder de 3 pisos metálicas $ 36.000 $ 18.000 2 $ 18.000 50%",
+    "name": "Grinder de 3 pisos metálicas",
+    "normalizedName": "grinder de 3 pisos metalicas",
+    "price": 36000,
+    "cost": 18000,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder metálica 1p Grinder metálica 1p $ 16.000 $ 8.000 1 $ 8.000 50%",
+    "name": "Grinder metálica 1p",
+    "normalizedName": "grinder metalica 1p",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder metálica rasta Grinder metálica rasta $ 24.000 $ 12.000 0 $ 12.000 50%",
+    "name": "Grinder metálica rasta",
+    "normalizedName": "grinder metalica rasta",
+    "price": 24000,
+    "cost": 12000,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder olograma acrilica Grinder olograma acrilica $ 10.000 $ 5.000 1 $ 5.000 50%",
+    "name": "Grinder olograma acrilica",
+    "normalizedName": "grinder olograma acrilica",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder pequeña Grinder pequeña $ 4.000 $ 2.000 2 $ 2.000 50%",
+    "name": "Grinder pequeña",
+    "normalizedName": "grinder pequena",
+    "price": 4000,
+    "cost": 2000,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Grinder plastica bate Grinder plastica bate $ 10.000 $ 4.000 1 $ 6.000 60%",
+    "name": "Grinder plastica bate",
+    "normalizedName": "grinder plastica bate",
+    "price": 10000,
+    "cost": 4000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Guantes por unidad Guantes por unidad $ 2.000 $ 500 -2 $ 1.500 75%",
+    "name": "Guantes por unidad",
+    "normalizedName": "guantes por unidad",
+    "price": 2000,
+    "cost": 500,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Herradura blanca Herradura blanca $ 2.000 $ 400 18 $ 1.600 80%",
+    "name": "Herradura blanca",
+    "normalizedName": "herradura blanca",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 18,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Herradura dorada Herradura dorada $ 2.000 $ 400 17 $ 1.600 80%",
+    "name": "Herradura dorada",
+    "normalizedName": "herradura dorada",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 17,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Herradura negra Herradura negra $ 2.000 $ 400 22 $ 1.600 80%",
+    "name": "Herradura negra",
+    "normalizedName": "herradura negra",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 22,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Herradura plateada Herradura plateada $ 2.000 $ 400 15 $ 1.600 80%",
+    "name": "Herradura plateada",
+    "normalizedName": "herradura plateada",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 15,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Herradura surtida de lujo Herradura surtida de lujo $ 20.000 $ 10.000 9 $ 10.000 50%",
+    "name": "Herradura surtida de lujo",
+    "normalizedName": "herradura surtida de lujo",
+    "price": 20000,
+    "cost": 10000,
+    "quantity": 9,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Hoja hectografica marca kores Hoja hectografica marca kores $ 5.000 $ 2.000 4 $ 3.000 60%",
+    "name": "Hoja hectografica marca kores",
+    "normalizedName": "hoja hectografica marca kores",
+    "price": 5000,
+    "cost": 2000,
+    "quantity": 4,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Hornet cellulose Hornet cellulose $ 3.000 $ 1.100 5 $ 1.900 63%",
+    "name": "Hornet cellulose",
+    "normalizedName": "hornet cellulose",
+    "price": 3000,
+    "cost": 1100,
+    "quantity": 5,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Industrial basico Industrial basico $ 3.000 $ 1.000 11 $ 2.000 67%",
+    "name": "Industrial basico",
+    "normalizedName": "industrial basico",
+    "price": 3000,
+    "cost": 1000,
+    "quantity": 11,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Industrial de lujo Industrial de lujo $ 20.000 $ 10.000 5 $ 10.000 50%",
+    "name": "Industrial de lujo",
+    "normalizedName": "industrial de lujo",
+    "price": 20000,
+    "cost": 10000,
+    "quantity": 5,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Jabón neutro para tattoo Jabón neutro para tattoo $ 7.000 $ 0 0 $ 7.000 100%",
+    "name": "Jabón neutro para tattoo",
+    "normalizedName": "jabon neutro para tattoo",
+    "price": 7000,
+    "cost": 0,
+    "quantity": 0,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Kit HITER RARO Kit HITER RARO $ 9.000 $ 4.500 1 $ 4.500 50%",
+    "name": "Kit HITER RARO",
+    "normalizedName": "kit hiter raro",
+    "price": 9000,
+    "cost": 4500,
+    "quantity": 1,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Labret circon cal 18 Labret circon cal 18 $ 6.000 $ 3.000 -2 $ 3.000 50%",
+    "name": "Labret circon cal 18",
+    "normalizedName": "labret circon cal 18",
+    "price": 6000,
+    "cost": 3000,
+    "quantity": 0,
+    "category": "Joyería básica",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Labret circon grande Labret circon grande $ 10.000 $ 5.000 6 $ 5.000 50%",
+    "name": "Labret circon grande",
+    "normalizedName": "labret circon grande",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 6,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Labret de lujo Labret de lujo $ 16.000 $ 8.000 20 $ 8.000 50%",
+    "name": "Labret de lujo",
+    "normalizedName": "labret de lujo",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 20,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Labret dorado Labret dorado $ 2.000 $ 400 65 $ 1.600 80%",
+    "name": "Labret dorado",
+    "normalizedName": "labret dorado",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 65,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Labret negro Labret negro $ 2.000 $ 400 58 $ 1.600 80%",
+    "name": "Labret negro",
+    "normalizedName": "labret negro",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 58,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Labret plateado Labret plateado $ 2.000 $ 400 28 $ 1.600 80%",
+    "name": "Labret plateado",
+    "normalizedName": "labret plateado",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 28,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Labret tornasol Labret tornasol $ 2.000 $ 400 37 $ 1.600 80%",
+    "name": "Labret tornasol",
+    "normalizedName": "labret tornasol",
+    "price": 2000,
+    "cost": 400,
+    "quantity": 37,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Lion rolling circus Lion rolling circus $ 8.000 $ 4.000 4 $ 4.000 50%",
+    "name": "Lion rolling circus",
+    "normalizedName": "lion rolling circus",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Marcador Hécto kores Marcador Hécto kores $ 20.000 $ 0 1 $ 20.000 100%",
+    "name": "Marcador Hécto kores",
+    "normalizedName": "marcador hecto kores",
+    "price": 20000,
+    "cost": 0,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Maya importada basket Maya importada basket $ 60.000 $ 30.000 1 $ 30.000 50%",
+    "name": "Maya importada basket",
+    "normalizedName": "maya importada basket",
+    "price": 60000,
+    "cost": 30000,
+    "quantity": 1,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Maya mujer Maya mujer $ 60.000 $ 35.000 2 $ 25.000 42%",
+    "name": "Maya mujer",
+    "normalizedName": "maya mujer",
+    "price": 60000,
+    "cost": 35000,
+    "quantity": 2,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Mechera genérica Mechera genérica $ 1.500 $ 600 4 $ 900 60%",
+    "name": "Mechera genérica",
+    "normalizedName": "mechera generica",
+    "price": 1500,
+    "cost": 600,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Media caja cartucho surtida Media caja cartucho surtida $ 45.000 $ 25.000 2 $ 20.000 44%",
+    "name": "Media caja cartucho surtida",
+    "normalizedName": "media caja cartucho surtida",
+    "price": 45000,
+    "cost": 25000,
+    "quantity": 2,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Microdermal surtido Microdermal surtido $ 16.000 $ 8.000 7 $ 8.000 50%",
+    "name": "Microdermal surtido",
+    "normalizedName": "microdermal surtido",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 7,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Mixer para tattoo Mixer para tattoo $ 15.000 $ 0 1 $ 15.000 100%",
+    "name": "Mixer para tattoo",
+    "normalizedName": "mixer para tattoo",
+    "price": 15000,
+    "cost": 0,
+    "quantity": 1,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Nostril circon Nostril circon $ 5.000 $ 1.400 5 $ 3.600 72%",
+    "name": "Nostril circon",
+    "normalizedName": "nostril circon",
+    "price": 5000,
+    "cost": 1400,
+    "quantity": 5,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Nostril en L figuras Nostril en L figuras $ 3.000 $ 1.000 6 $ 2.000 67%",
+    "name": "Nostril en L figuras",
+    "normalizedName": "nostril en l figuras",
+    "price": 3000,
+    "cost": 1000,
+    "quantity": 6,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Nostril en L surtidos Nostril en L surtidos $ 2.000 $ 300 38 $ 1.700 85%",
+    "name": "Nostril en L surtidos",
+    "normalizedName": "nostril en l surtidos",
+    "price": 2000,
+    "cost": 300,
+    "quantity": 38,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Nostril lujo Nostril lujo $ 10.000 $ 5.000 2 $ 5.000 50%",
+    "name": "Nostril lujo",
+    "normalizedName": "nostril lujo",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 2,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Nostril punto color completo Nostril punto color completo $ 2.000 $ 200 4 $ 1.800 90%",
+    "name": "Nostril punto color completo",
+    "normalizedName": "nostril punto color completo",
+    "price": 2000,
+    "cost": 200,
+    "quantity": 4,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Nostril punto surtido Nostril punto surtido $ 2.000 $ 200 7 $ 1.800 90%",
+    "name": "Nostril punto surtido",
+    "normalizedName": "nostril punto surtido",
+    "price": 2000,
+    "cost": 200,
+    "quantity": 7,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Nostril recto surtido Nostril recto surtido $ 2.000 $ 300 12 $ 1.700 85%",
+    "name": "Nostril recto surtido",
+    "normalizedName": "nostril recto surtido",
+    "price": 2000,
+    "cost": 300,
+    "quantity": 12,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- OCB #12 OCB #12 $ 6.000 $ 3.000 0 $ 3.000 50%",
+    "name": "OCB #12",
+    "normalizedName": "ocb 12",
+    "price": 6000,
+    "cost": 3000,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- OCB por 300 OCB por 300 $ 16.000 $ 8.000 2 $ 8.000 50%",
+    "name": "OCB por 300",
+    "normalizedName": "ocb por 300",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- OCB SURTIDOS #8 OCB SURTIDOS #8 $ 5.000 $ 2.500 7 $ 2.500 50%",
+    "name": "OCB SURTIDOS #8",
+    "normalizedName": "ocb surtidos 8",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 7,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- OLD TATTOO pomada OLD TATTOO pomada $ 15.000 $ 3.250 11 $ 11.750 78%",
+    "name": "OLD TATTOO pomada",
+    "normalizedName": "old tattoo pomada",
+    "price": 15000,
+    "cost": 3250,
+    "quantity": 11,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Ombligo básica Ombligo básica $ 5.000 $ 2.500 11 $ 2.500 50%",
+    "name": "Ombligo básica",
+    "normalizedName": "ombligo basica",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 11,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Ombligo bola de fuego Ombligo bola de fuego $ 18.000 $ 9.000 1 $ 9.000 50%",
+    "name": "Ombligo bola de fuego",
+    "normalizedName": "ombligo bola de fuego",
+    "price": 18000,
+    "cost": 9000,
+    "quantity": 1,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Ombligo de lujo colgante Ombligo de lujo colgante $ 25.000 $ 12.500 3 $ 12.500 50%",
+    "name": "Ombligo de lujo colgante",
+    "normalizedName": "ombligo de lujo colgante",
+    "price": 25000,
+    "cost": 12500,
+    "quantity": 3,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Ombligo lujo Ombligo lujo $ 16.000 $ 8.000 16 $ 8.000 50%",
+    "name": "Ombligo lujo",
+    "normalizedName": "ombligo lujo",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 16,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Oversai muska alto gramaje Oversai muska alto gramaje $ 70.000 $ 35.000 3 $ 35.000 50%",
+    "name": "Oversai muska alto gramaje",
+    "normalizedName": "oversai muska alto gramaje",
+    "price": 70000,
+    "cost": 35000,
+    "quantity": 3,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Oversie alto gramaje Oversie alto gramaje $ 60.000 $ 25.000 3 $ 35.000 58%",
+    "name": "Oversie alto gramaje",
+    "normalizedName": "oversie alto gramaje",
+    "price": 60000,
+    "cost": 25000,
+    "quantity": 3,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Oversie piel durazno Oversie piel durazno $ 40.000 $ 17.000 1 $ 23.000 57%",
+    "name": "Oversie piel durazno",
+    "normalizedName": "oversie piel durazno",
+    "price": 40000,
+    "cost": 17000,
+    "quantity": 1,
+    "category": "Prendas moska",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pantalón Pantalón $ 120.000 $ 0 1 $ 120.000 100%",
+    "name": "Pantalón",
+    "normalizedName": "pantalon",
+    "price": 120000,
+    "cost": 0,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Paper ACE x 32 Paper ACE x 32 $ 2.000 $ 900 1 $ 1.100 55%",
+    "name": "Paper ACE x 32",
+    "normalizedName": "paper ace x 32",
+    "price": 2000,
+    "cost": 900,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Paper ACE x32 Paper ACE x32 $ 4.000 $ 1.500 2 $ 2.500 63%",
+    "name": "Paper ACE x32",
+    "normalizedName": "paper ace x32",
+    "price": 4000,
+    "cost": 1500,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Paper blanco el abuelo Paper blanco el abuelo $ 2.000 $ 800 36 $ 1.200 60%",
+    "name": "Paper blanco el abuelo",
+    "normalizedName": "paper blanco el abuelo",
+    "price": 2000,
+    "cost": 800,
+    "quantity": 36,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Paper Blanton susan Paper Blanton susan $ 12.000 $ 5.000 3 $ 7.000 58%",
+    "name": "Paper Blanton susan",
+    "normalizedName": "paper blanton susan",
+    "price": 12000,
+    "cost": 5000,
+    "quantity": 3,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Paper ē100 caja c24 Paper ē100 caja c24 $ 8.000 $ 4.000 1 $ 4.000 50%",
+    "name": "Paper ē100 caja c24",
+    "normalizedName": "paper e100 caja c24",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": [
+      "merged_duplicate_reference"
+    ]
+  },
+  {
+    "rawLine": "- Paper hornet de sabores Paper hornet de sabores $ 2.500 $ 500 28 $ 2.000 80%",
+    "name": "Paper hornet de sabores",
+    "normalizedName": "paper hornet de sabores",
+    "price": 2500,
+    "cost": 500,
+    "quantity": 28,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Paper rarro coofee Paper rarro coofee $ 6.000 $ 3.000 2 $ 3.000 50%",
+    "name": "Paper rarro coofee",
+    "normalizedName": "paper rarro coofee",
+    "price": 6000,
+    "cost": 3000,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Papers el abuelo Papers el abuelo $ 4.000 $ 2.000 2 $ 2.000 50%",
+    "name": "Papers el abuelo",
+    "normalizedName": "papers el abuelo",
+    "price": 4000,
+    "cost": 2000,
+    "quantity": 2,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Papers raro cc Papers raro cc $ 7 $ 3.500 0 -$ 3.493 -49900%",
+    "name": "Papers raro cc",
+    "normalizedName": "papers raro cc",
+    "price": 7,
+    "cost": 7,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": [
+      "cost_greater_than_price_clamped",
+      "low_price_outlier"
+    ]
+  },
+  {
+    "rawLine": "- Parche de cicatrización Parche de cicatrización $ 5.000 $ 600 25 $ 4.400 88%",
+    "name": "Parche de cicatrización",
+    "normalizedName": "parche de cicatrizacion",
+    "price": 5000,
+    "cost": 600,
+    "quantity": 25,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pesa de expansión de lujo Pesa de expansión de lujo $ 15.000 $ 7.500 1 $ 7.500 50%",
+    "name": "Pesa de expansión de lujo",
+    "normalizedName": "pesa de expansion de lujo",
+    "price": 15000,
+    "cost": 7500,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pezon de lujo und Pezon de lujo und $ 30.000 $ 7.500 2 $ 22.500 75%",
+    "name": "Pezon de lujo und",
+    "normalizedName": "pezon de lujo und",
+    "price": 30000,
+    "cost": 7500,
+    "quantity": 2,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pezoneras Pezoneras $ 3.000 $ 1.500 3 $ 1.500 50%",
+    "name": "Pezoneras",
+    "normalizedName": "pezoneras",
+    "price": 3000,
+    "cost": 1500,
+    "quantity": 3,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pezoneras de lujo Pezoneras de lujo $ 50.000 $ 30.000 2 $ 20.000 40%",
+    "name": "Pezoneras de lujo",
+    "normalizedName": "pezoneras de lujo",
+    "price": 50000,
+    "cost": 30000,
+    "quantity": 2,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pezoneras de lujo circon Pezoneras de lujo circon $ 40.000 $ 20.000 2 $ 20.000 50%",
+    "name": "Pezoneras de lujo circon",
+    "normalizedName": "pezoneras de lujo circon",
+    "price": 40000,
+    "cost": 20000,
+    "quantity": 2,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pezones de lujo und Pezones de lujo und $ 14.000 $ 7.000 13 $ 7.000 50%",
+    "name": "Pezones de lujo und",
+    "normalizedName": "pezones de lujo und",
+    "price": 14000,
+    "cost": 7000,
+    "quantity": 13,
+    "category": "Joyería básica",
+    "issues": []
+  },
+  {
+    "rawLine": "- Piel sintética Piel sintética $ 35.000 $ 15.000 1 $ 20.000 57%",
+    "name": "Piel sintética",
+    "normalizedName": "piel sintetica",
+    "price": 35000,
+    "cost": 15000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pigmento fashion Pigmento fashion $ 35 $ 0 1 $ 35 100%",
+    "name": "Pigmento fashion",
+    "normalizedName": "pigmento fashion",
+    "price": 35,
+    "cost": 0,
+    "quantity": 1,
+    "category": "Insumos de tattoo",
+    "issues": [
+      "low_price_outlier"
+    ]
+  },
+  {
+    "rawLine": "- Pigmento menudeo dynamic Pigmento menudeo dynamic $ 25.000 $ 3.000 14 $ 22.000 88%",
+    "name": "Pigmento menudeo dynamic",
+    "normalizedName": "pigmento menudeo dynamic",
+    "price": 25000,
+    "cost": 3000,
+    "quantity": 14,
+    "category": "Insumos de tattoo",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa armable Pipa armable $ 16.000 $ 8.000 1 $ 8.000 50%",
+    "name": "Pipa armable",
+    "normalizedName": "pipa armable",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa de calavera Pipa de calavera $ 10.000 $ 5.000 0 $ 5.000 50%",
+    "name": "Pipa de calavera",
+    "normalizedName": "pipa de calavera",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa de tarjeta Pipa de tarjeta $ 30.000 $ 15.000 1 $ 15.000 50%",
+    "name": "Pipa de tarjeta",
+    "normalizedName": "pipa de tarjeta",
+    "price": 30000,
+    "cost": 15000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa de vidrio siliconada Pipa de vidrio siliconada $ 8.000 $ 4.000 1 $ 4.000 50%",
+    "name": "Pipa de vidrio siliconada",
+    "normalizedName": "pipa de vidrio siliconada",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa desarmable Pipa desarmable $ 8.000 $ 3.000 1 $ 5.000 63%",
+    "name": "Pipa desarmable",
+    "normalizedName": "pipa desarmable",
+    "price": 8000,
+    "cost": 3000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa generica Pipa generica $ 3.000 $ 500 14 $ 2.500 83%",
+    "name": "Pipa generica",
+    "normalizedName": "pipa generica",
+    "price": 3000,
+    "cost": 500,
+    "quantity": 14,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa genérica grande Pipa genérica grande $ 5.000 $ 2.000 7 $ 3.000 60%",
+    "name": "Pipa genérica grande",
+    "normalizedName": "pipa generica grande",
+    "price": 5000,
+    "cost": 2000,
+    "quantity": 7,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa genérica punta resina Pipa genérica punta resina $ 4.000 $ 1.000 6 $ 3.000 75%",
+    "name": "Pipa genérica punta resina",
+    "normalizedName": "pipa generica punta resina",
+    "price": 4000,
+    "cost": 1000,
+    "quantity": 6,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa goma Pipa goma $ 20.000 $ 8.000 0 $ 12.000 60%",
+    "name": "Pipa goma",
+    "normalizedName": "pipa goma",
+    "price": 20000,
+    "cost": 8000,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa madera hindú Pipa madera hindú $ 16.000 $ 6.000 5 $ 10.000 63%",
+    "name": "Pipa madera hindú",
+    "normalizedName": "pipa madera hindu",
+    "price": 16000,
+    "cost": 6000,
+    "quantity": 5,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa resina Pipa resina $ 6.000 $ 2.000 1 $ 4.000 67%",
+    "name": "Pipa resina",
+    "normalizedName": "pipa resina",
+    "price": 6000,
+    "cost": 2000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa vidrio cuchara Pipa vidrio cuchara $ 7.000 $ 3.000 -1 $ 4.000 57%",
+    "name": "Pipa vidrio cuchara",
+    "normalizedName": "pipa vidrio cuchara",
+    "price": 7000,
+    "cost": 3000,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": [
+      "quantity_negative_clamped_to_zero"
+    ]
+  },
+  {
+    "rawLine": "- Pipa vidrio genérica Pipa vidrio genérica $ 4.000 $ 2.000 4 $ 2.000 50%",
+    "name": "Pipa vidrio genérica",
+    "normalizedName": "pipa vidrio generica",
+    "price": 4000,
+    "cost": 2000,
+    "quantity": 4,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa vidrio lapiz Pipa vidrio lapiz $ 6.000 $ 3.000 0 $ 3.000 50%",
+    "name": "Pipa vidrio lapiz",
+    "normalizedName": "pipa vidrio lapiz",
+    "price": 6000,
+    "cost": 3000,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa vidrio logo Pipa vidrio logo $ 5.000 $ 2.000 1 $ 3.000 60%",
+    "name": "Pipa vidrio logo",
+    "normalizedName": "pipa vidrio logo",
+    "price": 5000,
+    "cost": 2000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa vidrio raro genérica Pipa vidrio raro genérica $ 6.000 $ 2.500 0 $ 3.500 58%",
+    "name": "Pipa vidrio raro genérica",
+    "normalizedName": "pipa vidrio raro generica",
+    "price": 6000,
+    "cost": 2500,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pipa vidrio resorte raro Pipa vidrio resorte raro $ 8.000 $ 4.000 1 $ 4.000 50%",
+    "name": "Pipa vidrio resorte raro",
+    "normalizedName": "pipa vidrio resorte raro",
+    "price": 8000,
+    "cost": 4000,
+    "quantity": 1,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Plam leaf Plam leaf $ 14.000 $ 7.000 0 $ 7.000 50%",
+    "name": "Plam leaf",
+    "normalizedName": "plam leaf",
+    "price": 14000,
+    "cost": 7000,
+    "quantity": 0,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pomada AYD Pomada AYD $ 5.000 $ 1.000 41 $ 4.000 80%",
+    "name": "Pomada AYD",
+    "normalizedName": "pomada ayd",
+    "price": 5000,
+    "cost": 1000,
+    "quantity": 41,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Porta porro Porta porro $ 3.000 $ 1.000 3 $ 2.000 67%",
+    "name": "Porta porro",
+    "normalizedName": "porta porro",
+    "price": 3000,
+    "cost": 1000,
+    "quantity": 3,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Pupa punta de vidrio Pupa punta de vidrio $ 16.000 $ 7.000 1 $ 9.000 56%",
+    "name": "Pupa punta de vidrio",
+    "normalizedName": "pupa punta de vidrio",
+    "price": 16000,
+    "cost": 7000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Raw Raw $ 30.000 $ 15.000 1 $ 15.000 50%",
+    "name": "Raw",
+    "normalizedName": "raw",
+    "price": 30000,
+    "cost": 15000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- RCK relax RCK relax $ 40.000 $ 25.000 1 $ 15.000 38%",
+    "name": "RCK relax",
+    "normalizedName": "rck relax",
+    "price": 40000,
+    "cost": 25000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Revolver cuchara Revolver cuchara $ 5.000 $ 2.000 1 $ 3.000 60%",
+    "name": "Revolver cuchara",
+    "normalizedName": "revolver cuchara",
+    "price": 5000,
+    "cost": 2000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Rollo de por 50mts Rollo de por 50mts $ 20.000 $ 10.000 1 $ 10.000 50%",
+    "name": "Rollo de por 50mts",
+    "normalizedName": "rollo de por 50mts",
+    "price": 20000,
+    "cost": 10000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Roolo corto de vinipel por 200 mts Roolo corto de vinipel por 200 mts $ 12.000 $ 8.000 1 $ 4.000 33%",
+    "name": "Roolo corto de vinipel por 200 mts",
+    "normalizedName": "roolo corto de vinipel por 200 mts",
+    "price": 12000,
+    "cost": 8000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Simulador Simulador $ 2.000 $ 1.000 2 $ 1.000 50%",
+    "name": "Simulador",
+    "normalizedName": "simulador",
+    "price": 2000,
+    "cost": 1000,
+    "quantity": 2,
+    "category": "Simulador",
+    "issues": []
+  },
+  {
+    "rawLine": "- Simulador lujo Simulador lujo $ 5.000 $ 1.500 18 $ 3.500 70%",
+    "name": "Simulador lujo",
+    "normalizedName": "simulador lujo",
+    "price": 5000,
+    "cost": 1500,
+    "quantity": 18,
+    "category": "Simulador",
+    "issues": []
+  },
+  {
+    "rawLine": "- Simuladores acrílicos surtidos b/n Simuladores acrílicos surtidos b/n $ 2.000 $ 500 6 $ 1.500 75%",
+    "name": "Simuladores acrílicos surtidos b/n",
+    "normalizedName": "simuladores acrilicos surtidos b n",
+    "price": 2000,
+    "cost": 500,
+    "quantity": 6,
+    "category": "Simulador",
+    "issues": []
+  },
+  {
+    "rawLine": "- Simuladores magnéticos Simuladores magnéticos $ 6.000 $ 3.000 4 $ 3.000 50%",
+    "name": "Simuladores magnéticos",
+    "normalizedName": "simuladores magneticos",
+    "price": 6000,
+    "cost": 3000,
+    "quantity": 4,
+    "category": "Simulador",
+    "issues": []
+  },
+  {
+    "rawLine": "- Smoking licor Smoking licor $ 5.000 $ 2.500 0 $ 2.500 50%",
+    "name": "Smoking licor",
+    "normalizedName": "smoking licor",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 0,
+    "category": "Smoking y fumadores",
+    "issues": []
+  },
+  {
+    "rawLine": "- Soplete Soplete $ 16.000 $ 8.000 1 $ 8.000 50%",
+    "name": "Soplete",
+    "normalizedName": "soplete",
+    "price": 16000,
+    "cost": 8000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Surface 90 grados Surface 90 grados $ 24.000 $ 12.000 1 $ 12.000 50%",
+    "name": "Surface 90 grados",
+    "normalizedName": "surface 90 grados",
+    "price": 24000,
+    "cost": 12000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Trilladora geométrica Trilladora geométrica $ 5.000 $ 2.500 2 $ 2.500 50%",
+    "name": "Trilladora geométrica",
+    "normalizedName": "trilladora geometrica",
+    "price": 5000,
+    "cost": 2500,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Túneles und Túneles und $ 15.000 $ 8.000 4 $ 7.000 47%",
+    "name": "Túneles und",
+    "normalizedName": "tuneles und",
+    "price": 15000,
+    "cost": 8000,
+    "quantity": 4,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Vaper BB3000 Vaper BB3000 $ 40.000 $ 0 2 $ 40.000 100%",
+    "name": "Vaper BB3000",
+    "normalizedName": "vaper bb3000",
+    "price": 40000,
+    "cost": 0,
+    "quantity": 2,
+    "category": "Vaper",
+    "issues": []
+  },
+  {
+    "rawLine": "- Vaper death row 7000 puffs Vaper death row 7000 puffs $ 30.000 $ 9.000 1 $ 21.000 70%",
+    "name": "Vaper death row 7000 puffs",
+    "normalizedName": "vaper death row 7000 puffs",
+    "price": 30000,
+    "cost": 9000,
+    "quantity": 1,
+    "category": "Vaper",
+    "issues": []
+  },
+  {
+    "rawLine": "- Vaper EC 200000 Vaper EC 200000 $ 90.000 $ 0 4 $ 90.000 100%",
+    "name": "Vaper EC 200000",
+    "normalizedName": "vaper ec 200000",
+    "price": 90000,
+    "cost": 0,
+    "quantity": 4,
+    "category": "Vaper",
+    "issues": []
+  },
+  {
+    "rawLine": "- Vaper GLXY6000 Vaper GLXY6000 $ 50.000 $ 0 3 $ 50.000 100%",
+    "name": "Vaper GLXY6000",
+    "normalizedName": "vaper glxy6000",
+    "price": 50000,
+    "cost": 0,
+    "quantity": 3,
+    "category": "Vaper",
+    "issues": []
+  },
+  {
+    "rawLine": "- Vaper lost Mary Vaper lost Mary $ 25.000 $ 8.000 0 $ 17.000 68%",
+    "name": "Vaper lost Mary",
+    "normalizedName": "vaper lost mary",
+    "price": 25000,
+    "cost": 8000,
+    "quantity": 0,
+    "category": "Vaper",
+    "issues": []
+  },
+  {
+    "rawLine": "- Vaper snoopy Vaper snoopy $ 35.000 $ 15.000 1 $ 20.000 57%",
+    "name": "Vaper snoopy",
+    "normalizedName": "vaper snoopy",
+    "price": 35000,
+    "cost": 15000,
+    "quantity": 1,
+    "category": "Vaper",
+    "issues": []
+  },
+  {
+    "rawLine": "- vidrio rasta bong vidrio rasta bong $ 30.000 $ 15.000 1 $ 15.000 50%",
+    "name": "vidrio rasta bong",
+    "normalizedName": "vidrio rasta bong",
+    "price": 30000,
+    "cost": 15000,
+    "quantity": 1,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- X50 X50 $ 10.000 $ 5.000 2 $ 5.000 50%",
+    "name": "X50",
+    "normalizedName": "x50",
+    "price": 10000,
+    "cost": 5000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  },
+  {
+    "rawLine": "- Zipo recargable Zipo recargable $ 15.000 $ 7.000 2 $ 8.000 53%",
+    "name": "Zipo recargable",
+    "normalizedName": "zipo recargable",
+    "price": 15000,
+    "cost": 7000,
+    "quantity": 2,
+    "category": "Sin categoría",
+    "issues": []
+  }
+]

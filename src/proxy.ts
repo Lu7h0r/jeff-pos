@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
+
+const SESSION_COOKIE_CANDIDATES = [
+  "sanctum.session_token",
+  "__Secure-sanctum.session_token",
+  "better-auth.session_token",
+  "__Secure-better-auth.session_token",
+] as const;
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return SESSION_COOKIE_CANDIDATES.some((cookieName) =>
+    request.cookies.has(cookieName),
+  );
+}
 
 export async function proxy(request: NextRequest) {
-  const sessionCookie = getSessionCookie(request);
+  const isAuthenticated = hasSessionCookie(request);
   const { pathname } = request.nextUrl;
 
   if (
-    !sessionCookie &&
+    !isAuthenticated &&
     !pathname.startsWith("/login") &&
     !pathname.startsWith("/signup") &&
     !pathname.startsWith("/auth") &&

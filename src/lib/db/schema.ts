@@ -86,6 +86,8 @@ export const products = pgTable("products", {
     .references(() => businesses.id),
   sku: varchar("sku", { length: 64 }),
   cost_amount: integer("cost_amount"),
+  image_url: text("image_url"),
+  image_urls_json: text("image_urls_json"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   kind: varchar("kind", { length: 20 }).notNull().default("product"),
   default_service_kind: varchar("default_service_kind", { length: 30 }),

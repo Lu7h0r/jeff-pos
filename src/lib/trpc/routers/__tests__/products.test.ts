@@ -84,6 +84,7 @@ describe("products.list", () => {
     expect(typeof p.price).toBe("number");
     expect(typeof p.in_stock).toBe("number");
     expect(typeof p.user_uid).toBe("string");
+    expect(Array.isArray(p.image_urls)).toBe(true);
     expect(p.created_at).toBeInstanceOf(Date);
   });
 });
@@ -124,14 +125,30 @@ describe("products.create", () => {
       in_stock: 5,
       description: "desc",
       category: "cat",
+      cost_amount: 500,
+      image_url: "https://cdn.example.com/p1.jpg",
+      image_urls: [
+        "https://cdn.example.com/p1.jpg",
+        "https://cdn.example.com/p2.jpg",
+      ],
     });
     expect(p.description).toBe("desc");
     expect(p.category).toBe("cat");
+    expect(p.cost_amount).toBe(500);
+    expect(p.image_url).toBe("https://cdn.example.com/p1.jpg");
+    expect(p.image_urls.length).toBe(2);
 
     const list = await caller.list();
     const persisted = list.find((x) => x.id === p.id)!;
     expect(persisted.description).toBe("desc");
     expect(persisted.category).toBe("cat");
+    expect(persisted.cost_amount).toBe(500);
+  });
+
+  it("rejects cost greater than price", async () => {
+    await expect(
+      caller.create({ name: "Bad margin", price: 100, cost_amount: 101, in_stock: 1 }),
+    ).rejects.toThrow();
   });
 
   it("rejects name: empty string — no record created", async () => {

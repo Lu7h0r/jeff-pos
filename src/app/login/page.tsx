@@ -7,13 +7,17 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MountainIcon } from "lucide-react";
-import { useRef } from "react";
+import { Suspense, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const t = useTranslations("login");
+  const searchParams = useSearchParams();
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const showInvalidCredentials =
+    searchParams.get("error") === "invalid-credentials";
 
   function fillDemo() {
     if (emailRef.current) emailRef.current.value = "test@example.com";
@@ -28,6 +32,14 @@ export default function LoginPage() {
           <h2 className="text-2xl font-bold">{t("welcome")}</h2>
           <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
+        {showInvalidCredentials ? (
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
+          >
+            {t("invalidCredentials")}
+          </p>
+        ) : null}
         <Card>
           <form>
             <CardContent className="space-y-4 mt-4">
@@ -81,5 +93,19 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+          <MountainIcon className="h-10 w-10 animate-pulse text-muted-foreground" />
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }

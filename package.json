@@ -12,6 +12,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun scripts/migrate.ts",
     "db:seed:jeff": "bun src/lib/db/seed.jeff.ts",
+    "inventory:import:treinta": "bun scripts/import-treinta-inventory.ts",
     "bootstrap:prod": "bun scripts/bootstrap-prod.ts",
     "test": "bun test src/lib/trpc/routers/__tests__",
     "test:coverage": "bun test --coverage src/lib/trpc/routers/__tests__"

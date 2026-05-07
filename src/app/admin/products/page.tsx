@@ -54,6 +54,13 @@ const SERVICE_KIND_OPTIONS: ServiceKind[] = [
   "other",
 ];
 
+function parseImageUrlsInput(raw: string): string[] {
+  return raw
+    .split(/\r?\n|,/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 export default function Products() {
   const t = useTranslations("products");
   const tc = useTranslations("common");
@@ -80,10 +87,17 @@ export default function Products() {
       name: z.string().min(1, tv("nameRequired")),
       description: z.string(),
       price: z.number().min(0, tv("mustBePositive")),
+      cost_amount: z.number().min(0, tv("mustBePositive")),
       in_stock: z.number().int().min(0, tv("stockNonNegative")),
       category: z.string(),
+      image_url: z.string(),
+      image_urls: z.string(),
       kind: z.enum(["product", "service"]),
       default_service_kind: z.string(),
+    })
+    .refine((v) => v.cost_amount <= v.price, {
+      message: t("costExceedsPrice"),
+      path: ["cost_amount"],
     })
     .refine(
       (v) => v.kind !== "service" || v.default_service_kind !== "",
@@ -139,6 +153,32 @@ export default function Products() {
       accessorFn: (row) => row.price,
       render: (row) => formatCurrency(row.price),
     },
+    {
+      key: "cost_amount",
+      header: t("colCost"),
+      sortable: true,
+      accessorFn: (row) => row.cost_amount ?? 0,
+      render: (row) => formatCurrency(row.cost_amount ?? 0),
+    },
+    {
+      key: "unit_profit",
+      header: t("colProfit"),
+      accessorFn: (row) => row.price - (row.cost_amount ?? 0),
+      render: (row) => formatCurrency(row.price - (row.cost_amount ?? 0)),
+    },
+    {
+      key: "margin_percent",
+      header: t("colMargin"),
+      accessorFn: (row) => {
+        if (row.price <= 0) return 0;
+        return ((row.price - (row.cost_amount ?? 0)) / row.price) * 100;
+      },
+      render: (row) => {
+        if (row.price <= 0) return "0.0%";
+        const margin = ((row.price - (row.cost_amount ?? 0)) / row.price) * 100;
+        return `${margin.toFixed(1)}%`;
+      },
+    },
     { key: "in_stock", header: t("colStock"), sortable: true },
   ];
 
@@ -152,6 +192,24 @@ export default function Products() {
     },
     { key: "description", header: t("colDescription"), getValue: (p) => p.description ?? "" },
     { key: "price", header: t("colPrice"), getValue: (p) => (p.price / 100).toFixed(2) },
+    {
+      key: "cost_amount",
+      header: t("colCost"),
+      getValue: (p) => ((p.cost_amount ?? 0) / 100).toFixed(2),
+    },
+    {
+      key: "unit_profit",
+      header: t("colProfit"),
+      getValue: (p) => ((p.price - (p.cost_amount ?? 0)) / 100).toFixed(2),
+    },
+    {
+      key: "margin_percent",
+      header: t("colMargin"),
+      getValue: (p) => {
+        if (p.price <= 0) return "0.00";
+        return (((p.price - (p.cost_amount ?? 0)) / p.price) * 100).toFixed(2);
+      },
+    },
     { key: "in_stock", header: t("colStock"), getValue: (p) => p.in_stock },
     { key: "category", header: t("categoryLabel"), getValue: (p) => p.category ?? "" },
   ];
@@ -184,8 +242,11 @@ export default function Products() {
       name: "",
       description: "",
       price: 0,
+      cost_amount: 0,
       in_stock: 0,
       category: "",
+      image_url: "",
+      image_urls: "",
       kind: "product" as ProductKind,
       default_service_kind: "",
     },
@@ -198,8 +259,11 @@ export default function Products() {
         name: value.name,
         description: value.description || undefined,
         price: Math.round(value.price * 100),
+        cost_amount: Math.round(value.cost_amount * 100),
         in_stock: value.in_stock,
         category: value.category || undefined,
+        image_url: value.image_url || undefined,
+        image_urls: parseImageUrlsInput(value.image_urls),
       };
       if (isEditing) {
         updateMutation.mutate({
@@ -245,7 +309,10 @@ export default function Products() {
     form.setFieldValue("description", p.description ?? "");
     form.setFieldValue("price", p.price / 100);
     form.setFieldValue("in_stock", p.in_stock);
+    form.setFieldValue("cost_amount", (p.cost_amount ?? 0) / 100);
     form.setFieldValue("category", p.category ?? "");
+    form.setFieldValue("image_url", p.image_url ?? "");
+    form.setFieldValue("image_urls", p.image_urls.join("\n"));
     form.setFieldValue("kind", p.kind);
     form.setFieldValue("default_service_kind", p.default_service_kind ?? "");
     setIsDialogOpen(true);
@@ -440,6 +507,24 @@ export default function Products() {
                   </div>
                 )}
               </form.Field>
+              <form.Field name="cost_amount">
+                {(field) => (
+                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
+                    <Label htmlFor="cost_amount" className="sm:text-right">{t("costLabel")}</Label>
+                    <div className="col-span-3">
+                      <Input
+                        id="cost_amount"
+                        type="number"
+                        step="0.01"
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(Number(e.target.value))}
+                        onBlur={field.handleBlur}
+                        error={field.state.meta.errors.length > 0 ? field.state.meta.errors.map(e => e?.message ?? e).join(", ") : undefined}
+                      />
+                    </div>
+                  </div>
+                )}
+              </form.Field>
               <form.Field name="category">
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
@@ -453,6 +538,22 @@ export default function Products() {
                         <SelectItem value="home">{t("categoryHome")}</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                )}
+              </form.Field>
+              <form.Field name="image_url">
+                {(field) => (
+                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
+                    <Label htmlFor="image_url" className="sm:text-right">{t("imageUrlLabel")}</Label>
+                    <Input id="image_url" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} className="col-span-3" placeholder="https://..." />
+                  </div>
+                )}
+              </form.Field>
+              <form.Field name="image_urls">
+                {(field) => (
+                  <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-start gap-2 sm:gap-4">
+                    <Label htmlFor="image_urls" className="sm:text-right pt-2">{t("imageUrlsLabel")}</Label>
+                    <Input id="image_urls" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} className="col-span-3" placeholder={t("imageUrlsPlaceholder")} />
                   </div>
                 )}
               </form.Field>

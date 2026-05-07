@@ -27,11 +27,41 @@ const productSchema = z.object({
   price: z.number(),
   in_stock: z.number(),
   category: z.string().nullable(),
+  cost_amount: z.number().nullable(),
+  image_url: z.string().nullable(),
+  image_urls: z.array(z.string().url()),
   user_uid: z.string(),
   kind: productKindSchema,
   default_service_kind: serviceKindSchema.nullable(),
   created_at: z.date().nullable(),
 });
+
+function parseImageUrls(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((value): value is string => typeof value === "string");
+  } catch {
+    return [];
+  }
+}
+
+function toProductOutput(
+  row: typeof products.$inferSelect,
+): z.infer<typeof productSchema> {
+  return {
+    ...row,
+    cost_amount: row.cost_amount ?? null,
+    image_url: row.image_url ?? null,
+    image_urls: parseImageUrls(row.image_urls_json),
+    kind: productKindSchema.parse(row.kind),
+    default_service_kind:
+      row.default_service_kind === null
+        ? null
+        : serviceKindSchema.parse(row.default_service_kind),
+  };
+}
 
 // Service products MUST carry a default_service_kind so the POS attach
 // dialog can prefill it and so reports can group services without having to
@@ -42,10 +72,21 @@ const createInputSchema = z
     name: z.string().min(1),
     description: z.string().optional(),
     price: z.number().int(),
+    cost_amount: z.number().int().min(0).optional(),
     in_stock: z.number().int().min(0),
     category: z.string().optional(),
+    image_url: z.string().url().optional(),
+    image_urls: z.array(z.string().url()).max(8).optional(),
     kind: productKindSchema.default("product"),
     default_service_kind: serviceKindSchema.optional(),
+  })
+  .refine((v) => v.price >= 0, {
+    message: "price must be >= 0",
+    path: ["price"],
+  })
+  .refine((v) => (v.cost_amount ?? 0) <= v.price, {
+    message: "cost_amount cannot exceed price",
+    path: ["cost_amount"],
   })
   .refine(
     (v) => v.kind !== "service" || v.default_service_kind !== undefined,
@@ -68,8 +109,11 @@ const updateInputSchema = z
     name: z.string().min(1).optional(),
     description: z.string().optional(),
     price: z.number().int().optional(),
+    cost_amount: z.number().int().min(0).nullable().optional(),
     in_stock: z.number().int().min(0).optional(),
     category: z.string().optional(),
+    image_url: z.string().url().nullable().optional(),
+    image_urls: z.array(z.string().url()).max(8).optional(),
     kind: productKindSchema.optional(),
     default_service_kind: serviceKindSchema.nullable().optional(),
   })
@@ -78,6 +122,20 @@ const updateInputSchema = z
     {
       message: "default_service_kind is required when switching to service",
       path: ["default_service_kind"],
+    },
+  )
+  .refine(
+    (v) => {
+      const nextPrice = v.price;
+      const nextCost = v.cost_amount;
+      if (nextPrice === undefined || nextCost === undefined || nextCost === null) {
+        return true;
+      }
+      return nextCost <= nextPrice;
+    },
+    {
+      message: "cost_amount cannot exceed price",
+      path: ["cost_amount"],
     },
   );
 
@@ -91,18 +149,10 @@ export const productsRouter = router({
         .select()
         .from(products)
         .where(eq(products.user_uid, ctx.user.id));
-      return rows.map((r) => ({
-        ...r,
-        kind: productKindSchema.parse(r.kind),
-        default_service_kind:
-          r.default_service_kind === null
-            ? null
-            : serviceKindSchema.parse(r.default_service_kind),
-      }));
+      return rows.map((r) => toProductOutput(r));
     }),
 
   create: ownerOrManager
-    .meta({ openapi: { method: "POST", path: "/products", tags: ["Products"], summary: "Create a product" } })
     .input(createInputSchema)
     .output(productSchema)
     .mutation(async ({ ctx, input }) => {
@@ -118,41 +168,52 @@ export const productsRouter = router({
       const [data] = await db
         .insert(products)
         .values({
-          ...input,
+          name: input.name,
+          description: input.description,
+          price: input.price,
+          cost_amount: input.cost_amount ?? null,
+          in_stock: input.in_stock,
+          category: input.category,
+          kind: input.kind,
+          image_urls_json: JSON.stringify(input.image_urls ?? []),
+          image_url: input.image_url ?? input.image_urls?.[0] ?? null,
           default_service_kind: input.default_service_kind ?? null,
           user_uid: ctx.user.id,
           business_id: ctx.activeBusinessId,
         })
         .returning();
-      return {
-        ...data,
-        kind: productKindSchema.parse(data.kind),
-        default_service_kind:
-          data.default_service_kind === null
-            ? null
-            : serviceKindSchema.parse(data.default_service_kind),
-      };
+      return toProductOutput(data);
     }),
 
   update: ownerOrManager
-    .meta({ openapi: { method: "PATCH", path: "/products/{id}", tags: ["Products"], summary: "Update a product" } })
     .input(updateInputSchema)
     .output(productSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+      const nextImageUrls =
+        data.image_urls === undefined ? undefined : JSON.stringify(data.image_urls);
+      const nextImageUrl =
+        data.image_url === undefined
+          ? undefined
+          : data.image_url ?? data.image_urls?.[0] ?? null;
+      const updatePayload = {
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        cost_amount: data.cost_amount,
+        in_stock: data.in_stock,
+        category: data.category,
+        kind: data.kind,
+        default_service_kind: data.default_service_kind,
+        image_urls_json: nextImageUrls,
+        image_url: nextImageUrl,
+      };
       const [updated] = await db
         .update(products)
-        .set({ ...data, user_uid: ctx.user.id })
+        .set({ ...updatePayload, user_uid: ctx.user.id })
         .where(and(eq(products.id, id), eq(products.user_uid, ctx.user.id)))
         .returning();
-      return {
-        ...updated,
-        kind: productKindSchema.parse(updated.kind),
-        default_service_kind:
-          updated.default_service_kind === null
-            ? null
-            : serviceKindSchema.parse(updated.default_service_kind),
-      };
+      return toProductOutput(updated);
     }),
 
   delete: ownerOrManager
