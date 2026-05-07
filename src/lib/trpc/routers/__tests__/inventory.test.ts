@@ -11,8 +11,11 @@ const { createCallerFactory } = await import("../../init");
 const schema = await import("@/lib/db/schema");
 
 const caller = createCallerFactory(inventoryRouter);
-const callerAs = (uid: string, locationId?: number) =>
-  caller(makeContext(uid, { locationId: locationId ?? null }));
+const callerAs = (
+  uid: string,
+  locationId?: number,
+  role: "owner" | "manager" | "cashier" | "artist" | "viewer" = "owner",
+) => caller(makeContext(uid, { locationId: locationId ?? null, role }));
 
 let bizJeffId: number;
 let bizOtherId: number;
@@ -29,6 +32,7 @@ beforeAll(async () => {
   await db.insert(schema.user).values([
     { id: "u-jeff", name: "Jeff", email: "jeff@test.com", emailVerified: false, image: null },
     { id: "u-other", name: "Other", email: "other@test.com", emailVerified: false, image: null },
+    { id: "u-cashier", name: "Cashier", email: "cashier@test.com", emailVerified: false, image: null },
     { id: "u-orphan", name: "Orphan", email: "orphan@test.com", emailVerified: false, image: null },
   ]);
 
@@ -44,6 +48,7 @@ beforeAll(async () => {
 
   await db.insert(schema.businessMembers).values([
     { business_id: bizJeffId, user_id: "u-jeff", role: "owner", status: "active" },
+    { business_id: bizJeffId, user_id: "u-cashier", role: "cashier", status: "active" },
     { business_id: bizOtherId, user_id: "u-other", role: "owner", status: "active" },
   ]);
 
@@ -158,6 +163,17 @@ describe("inventory.balancesByLocation", () => {
 
     await expect(
       callerAs("u-orphan").balancesByLocation({ locationId: amparoId }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" } satisfies Partial<TRPCError>);
+  });
+
+  it("rejects cashier role even when membership is valid (FORBIDDEN)", async () => {
+    await expect(
+      callerAs("u-cashier", amparoId, "cashier").adjust({
+        productId: pinkProductId,
+        locationId: amparoId,
+        quantityDelta: 1,
+        type: "adjustment",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" } satisfies Partial<TRPCError>);
   });
 });

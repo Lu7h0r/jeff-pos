@@ -23,10 +23,12 @@ const TABLES: PgTable[] = [
   schema.cashSessions,
   schema.cashMovements,
   schema.orders,
+  schema.serviceAgreements,
   schema.orderItems,
   // order_payments references orders, payment_methods and cash_sessions —
   // all already declared above.
   schema.orderPayments,
+  schema.serviceAgreementPayments,
   // inventory_balances and inventory_movements both reference businesses,
   // locations and products — all already declared above. Keep this last so
   // FK targets exist when DDL is applied in order.

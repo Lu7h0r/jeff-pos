@@ -14,6 +14,12 @@ const factory = createCallerFactory(ordersRouter);
 const callerAs = (uid: string, businessId?: number) =>
   factory(makeContext(uid, { businessId: businessId ?? null }));
 
+const callerAsRole = (
+  uid: string,
+  role: "owner" | "manager" | "cashier" | "artist" | "viewer",
+  businessId?: number,
+) => factory(makeContext(uid, { businessId: businessId ?? null, role }));
+
 let bizJeffId: number;
 let bizOtherId: number;
 let amparoId: number;
@@ -38,6 +44,7 @@ beforeAll(async () => {
   await db.insert(schema.user).values([
     { id: "u-jeff", name: "Jeff", email: "jeff-orders@test.com", emailVerified: false, image: null },
     { id: "u-other", name: "Other", email: "other-orders@test.com", emailVerified: false, image: null },
+    { id: "u-cashier", name: "Cashier", email: "cashier-orders@test.com", emailVerified: false, image: null },
     { id: "u-orphan", name: "Orphan", email: "orphan-orders@test.com", emailVerified: false, image: null },
   ]);
 
@@ -53,6 +60,7 @@ beforeAll(async () => {
 
   await db.insert(schema.businessMembers).values([
     { business_id: bizJeffId, user_id: "u-jeff", role: "owner", status: "active" },
+    { business_id: bizJeffId, user_id: "u-cashier", role: "cashier", status: "active" },
     { business_id: bizOtherId, user_id: "u-other", role: "owner", status: "active" },
   ]);
 
@@ -262,6 +270,22 @@ describe("orders.create — atomic POS sale", () => {
     );
   });
 
+  it("(2b) allows cashier role to register a payment at location scope", async () => {
+    const order = await callerAsRole("u-cashier", "cashier", bizJeffId).create({
+      locationId: amparoId,
+      customerId,
+      items: [{ productId: pinkProductId, quantity: 1 }],
+      paymentLines: [{ paymentMethodId: pmCashId, amount: 1_000 }],
+    });
+
+    expect(order.payment_status).toBe("paid");
+    expect(order.process_status).toBe("complete");
+    expect(order.business_id).toBe(bizJeffId);
+    expect(order.location_id).toBe(amparoId);
+    expect(order.payments).toHaveLength(1);
+    expect(order.payments[0].amount).toBe(1_000);
+  });
+
   it("(3) server recomputes total from DB prices (client cannot supply unit price)", async () => {
     // No total field exists on the input contract. Verify the input.items
     // schema rejects extra `price` keys (zod strict by default? — it strips
@@ -287,6 +311,34 @@ describe("orders.create — atomic POS sale", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" } satisfies Partial<TRPCError>);
   });
 
+  it("(4b) rejects underpayment across multiple payment lines (basic partial consistency)", async () => {
+    await expect(
+      jeffCaller().create({
+        locationId: amparoId,
+        items: [{ productId: blackProductId, quantity: 1 }],
+        paymentLines: [
+          { paymentMethodId: pmCashId, amount: 500 },
+          { paymentMethodId: pmTransferId, amount: 500 },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" } satisfies Partial<TRPCError>);
+  });
+
+  it("(4c) rejects overpayment as well; payment sum must equal order total", async () => {
+    await expect(
+      jeffCaller().create({
+        locationId: amparoId,
+        items: [{ productId: pinkProductId, quantity: 1 }],
+        paymentLines: [{ paymentMethodId: pmCashId, amount: 1_500 }],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" } satisfies Partial<TRPCError>);
+  });
+
+  // TODO(fase-1): when order-level abonos are implemented, add integration
+  // coverage for: unpaid -> partially_paid -> paid transitions, pending-balance
+  // calculation, and double-entry consistency between order_payments and
+  // cash_movements for each incremental collection.
+
   it("(5) rejects when stock at the location is insufficient (CONFLICT); other location not consulted", async () => {
     // Britalia has 5 Pink Ink units; ask for 100.
     await expect(
@@ -307,8 +359,8 @@ describe("orders.create — atomic POS sale", () => {
           eq(schema.inventoryBalances.product_id, pinkProductId),
         ),
       );
-    // Started at 20 → after tests 1 and 3 → 20-2-3=15
-    expect(amparoBal.quantity_on_hand).toBe(15);
+    // Started at 20 → after tests 1, 2b and 3 → 20-2-1-3=14
+    expect(amparoBal.quantity_on_hand).toBe(14);
   });
 
   it("(6) rejects when no open cash session for the location (CONFLICT)", async () => {

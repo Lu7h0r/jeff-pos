@@ -196,6 +196,54 @@ export const orderPayments = pgTable("order_payments", {
   created_at: timestamp("created_at").defaultNow(),
 });
 
+// ── Service Agreements (Fase 1) ─────────────────────────────────────────────
+// Commercial entity for tattoo/piercing projects with agreed total and partial
+// payments over time. Amount fields are in minor currency units (COP cents-like
+// integer strategy already used across the app).
+export const serviceAgreements = pgTable("service_agreements", {
+  id: serial("id").primaryKey(),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  customer_id: integer("customer_id").references(() => customers.id),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  service_name: varchar("service_name", { length: 255 }).notNull(),
+  total_agreed_amount: integer("total_agreed_amount").notNull(),
+  total_paid_amount: integer("total_paid_amount").notNull().default(0),
+  pending_amount: integer("pending_amount").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+export const serviceAgreementPayments = pgTable("service_agreement_payments", {
+  id: serial("id").primaryKey(),
+  service_agreement_id: integer("service_agreement_id")
+    .notNull()
+    .references(() => serviceAgreements.id),
+  order_id: integer("order_id")
+    .notNull()
+    .references(() => orders.id),
+  payment_method_id: integer("payment_method_id")
+    .notNull()
+    .references(() => paymentMethods.id),
+  cash_session_id: integer("cash_session_id")
+    .notNull()
+    .references(() => cashSessions.id),
+  amount: integer("amount").notNull(),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
 // ── Relations ───────────────────────────────────────────────────────────────
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   customer: one(customers, {
@@ -240,6 +288,55 @@ export const orderPaymentsRelations = relations(orderPayments, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const serviceAgreementsRelations = relations(
+  serviceAgreements,
+  ({ one, many }) => ({
+    business: one(businesses, {
+      fields: [serviceAgreements.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [serviceAgreements.location_id],
+      references: [locations.id],
+    }),
+    customer: one(customers, {
+      fields: [serviceAgreements.customer_id],
+      references: [customers.id],
+    }),
+    createdBy: one(user, {
+      fields: [serviceAgreements.created_by_user_id],
+      references: [user.id],
+    }),
+    payments: many(serviceAgreementPayments),
+  }),
+);
+
+export const serviceAgreementPaymentsRelations = relations(
+  serviceAgreementPayments,
+  ({ one }) => ({
+    agreement: one(serviceAgreements, {
+      fields: [serviceAgreementPayments.service_agreement_id],
+      references: [serviceAgreements.id],
+    }),
+    order: one(orders, {
+      fields: [serviceAgreementPayments.order_id],
+      references: [orders.id],
+    }),
+    paymentMethod: one(paymentMethods, {
+      fields: [serviceAgreementPayments.payment_method_id],
+      references: [paymentMethods.id],
+    }),
+    cashSession: one(cashSessions, {
+      fields: [serviceAgreementPayments.cash_session_id],
+      references: [cashSessions.id],
+    }),
+    createdBy: one(user, {
+      fields: [serviceAgreementPayments.created_by_user_id],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, {

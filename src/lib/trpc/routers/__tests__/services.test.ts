@@ -174,6 +174,11 @@ afterAll(async () => {
 });
 
 describe("services.attachToOrderItem", () => {
+  // TODO(fase-1): pending-balance calculations for services with abonos are
+  // blocked by missing order-level incremental collection flow in ordersRouter
+  // (today create enforces sum(paymentLines) === total and always persists paid).
+  // When abonos exist, add integration coverage here for saldo_pendiente based
+  // on service-linked order totals minus cumulative order_payments.
   it("creates service_sale + commission_estimate with snapshot split (30/70)", async () => {
     const r = await callerAs("u-jeff", bizJeffId).attachToOrderItem({
       orderItemId: orderItemJeffId,
