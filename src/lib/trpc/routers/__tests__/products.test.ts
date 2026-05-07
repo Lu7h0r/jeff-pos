@@ -61,7 +61,7 @@ describe("products.list", () => {
     expect(list.length).toBe(0);
   });
 
-  it("filters by user_uid — does not leak cross-user data", async () => {
+  it("filters by business_id — does not leak cross-business data", async () => {
     await caller.create({ name: "P1", price: 100, in_stock: 10 });
     const other = callerAs("other-user", bizOtherId);
     await other.create({ name: "P-other", price: 50, in_stock: 5 });
@@ -180,9 +180,12 @@ describe("products.update", () => {
     expect(persisted.in_stock).toBe(1); // unchanged field preserved
   });
 
-  it("cross-user update fails and original data is untouched", async () => {
+  it("cross-business update fails and original data is untouched", async () => {
     const p = await caller.create({ name: "Mine", price: 100, in_stock: 1 });
-    const other = callerAs("attacker", bizUser1Id);
+    const other = callerAs("other-user", bizOtherId);
+    await other.create({ name: "Other", price: 50, in_stock: 1 });
+
+    // User from a different business cannot update our product (business_id mismatch → NOT_FOUND)
     await expect(other.update({ id: p.id, name: "Hacked" })).rejects.toThrow();
 
     const list = await caller.list();

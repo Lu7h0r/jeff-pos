@@ -145,10 +145,11 @@ export const productsRouter = router({
     .input(z.void())
     .output(z.array(productSchema))
     .query(async ({ ctx }) => {
+      if (ctx.activeBusinessId == null) return [];
       const rows = await db
         .select()
         .from(products)
-        .where(eq(products.user_uid, ctx.user.id));
+        .where(eq(products.business_id, ctx.activeBusinessId));
       return rows.map((r) => toProductOutput(r));
     }),
 
@@ -208,11 +209,15 @@ export const productsRouter = router({
         image_urls_json: nextImageUrls,
         image_url: nextImageUrl,
       };
+      if (ctx.activeBusinessId == null)
+        throw new TRPCError({ code: "FORBIDDEN", message: "No active business" });
       const [updated] = await db
         .update(products)
-        .set({ ...updatePayload, user_uid: ctx.user.id })
-        .where(and(eq(products.id, id), eq(products.user_uid, ctx.user.id)))
+        .set(updatePayload)
+        .where(and(eq(products.id, id), eq(products.business_id, ctx.activeBusinessId)))
         .returning();
+      if (!updated)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Product not found" });
       return toProductOutput(updated);
     }),
 
@@ -221,9 +226,11 @@ export const productsRouter = router({
     .input(z.object({ id: z.number() }))
     .output(z.object({ success: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
+      if (ctx.activeBusinessId == null)
+        throw new TRPCError({ code: "FORBIDDEN", message: "No active business" });
       await db
         .delete(products)
-        .where(and(eq(products.id, input.id), eq(products.user_uid, ctx.user.id)));
+        .where(and(eq(products.id, input.id), eq(products.business_id, ctx.activeBusinessId)));
       return { success: true };
     }),
 });
