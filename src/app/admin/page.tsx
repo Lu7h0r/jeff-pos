@@ -193,7 +193,7 @@ export default function DashboardPage() {
               <Badge variant="secondary">Inicio de turno</Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              1) Selecciona el local activo. 2) Abre caja. 3) Registra ventas en POS.
+              1) Selecciona el local activo. 2) Abre caja. 3) Registra ventas en Sanctum Desk.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -211,10 +211,10 @@ export default function DashboardPage() {
                 cta: "Ir a Caja",
               },
               {
-                title: "POS",
+                title: "Sanctum Desk",
                 hint: "Busca productos o servicios, arma carrito y confirma venta.",
                 href: "/admin/pos",
-                cta: "Ir a POS",
+                cta: "Ir a Sanctum Desk",
               },
               {
                 title: "Inventario",

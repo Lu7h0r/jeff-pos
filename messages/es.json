@@ -83,7 +83,7 @@
     "staff": "Personal",
     "workstations": "Estaciones",
     "stationRentals": "Alquiler de estaciones",
-    "pos": "POS",
+    "pos": "Sanctum Desk",
     "team": "Equipo"
   },
   "layout": {
@@ -173,12 +173,12 @@
     "closeSessionSuccess": "Caja cerrada",
     "closeSessionError": "No se pudo cerrar la caja",
     "movementsTitle": "Movimientos de caja",
-    "movementsSubtitle": "Las ventas, devoluciones y movimientos manuales aparecen aquí. El registro de movimientos se conecta al POS en el Batch 4; por ahora esta sección está vacía.",
+    "movementsSubtitle": "Las ventas, devoluciones y movimientos manuales aparecen aquí. El registro de movimientos se conecta a Sanctum Desk en el Batch 4; por ahora esta sección está vacía.",
     "movementsEmpty": "Aún no hay movimientos en esta caja."
   },
   "pos": {
-    "unavailableTitle": "POS no disponible",
-    "unavailableHint": "No hay un local activo. Selecciona un local en la barra superior antes de abrir el POS.",
+    "unavailableTitle": "Sanctum Desk no disponible",
+    "unavailableHint": "No hay un local activo. Selecciona un local en la barra superior antes de abrir Sanctum Desk.",
     "noSessionTitle": "No hay caja abierta",
     "noSessionHint": "No puedes registrar ventas sin una caja abierta en este local. Abre una desde la página de Caja primero.",
     "goToCashier": "Ir a Caja",
@@ -255,7 +255,7 @@
     "quickServiceCreated": "Acuerdo de servicio #{id} creado",
     "quickServiceCreateError": "No se pudo crear el acuerdo de servicio",
     "quickServiceSummaryTitle": "Acuerdo #{id} creado",
-    "quickServiceInitialPaymentNote": "Abono inicial desde POS",
+    "quickServiceInitialPaymentNote": "Abono inicial desde Sanctum Desk",
     "quickServiceValidationArtist": "Selecciona un artista.",
     "quickServiceValidationName": "Ingresa el nombre del servicio.",
     "quickServiceValidationTotal": "Ingresa un total pactado mayor a 0.",
@@ -330,7 +330,7 @@
     "consentRevokeAction": "Revocar",
     "consentUpdateSuccess": "Consentimiento actualizado",
     "consentUpdateError": "No se pudo actualizar el consentimiento",
-    "consentSourcePos": "Actualización desde POS",
+    "consentSourcePos": "Actualización desde Sanctum Desk",
     "consentStatuses": {
       "granted": "Otorgado",
       "revoked": "Revocado",
