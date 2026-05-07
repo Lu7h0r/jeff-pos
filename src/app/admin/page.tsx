@@ -24,6 +24,7 @@ import {
 import {
   AlertTriangleIcon,
   BanIcon,
+  ChevronRightIcon,
   DollarSignIcon,
   HashIcon,
   MapPinIcon,
@@ -174,6 +175,62 @@ export default function DashboardPage() {
                 <a href="/admin/cashier">{t("openCash")}</a>
               </Button>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Onboarding quick-flow (v1) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>¿Cómo empezar? Flujo recomendado</CardTitle>
+          <CardDescription>
+            Guía rápida para turnos con rotación entre locales.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border bg-muted/20 p-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">Flujo 1 — Apertura de caja</h3>
+              <Badge variant="secondary">Inicio de turno</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Sigue estos pasos al iniciar turno para vender en el local correcto.
+            </p>
+            <ol className="mt-3 space-y-2 text-sm">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-xs font-medium">1</span>
+                <span>
+                  Selecciona el <strong>local de trabajo</strong> en el switcher de
+                  la barra superior.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-xs font-medium">2</span>
+                <span>
+                  Entra a <strong>Caja</strong> y registra el monto inicial para
+                  dejarla en estado <strong>abierta</strong>.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-xs font-medium">3</span>
+                <span>Pasa a <strong>POS</strong> para registrar ventas del turno.</span>
+              </li>
+            </ol>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button asChild size="sm">
+                <a href="/admin/cashier">
+                  Ir a Caja <ChevronRightIcon className="ml-1 h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <a href="/admin/pos">
+                  Ir a POS <ChevronRightIcon className="ml-1 h-4 w-4" />
+                </a>
+              </Button>
+              <Button asChild size="sm" variant="ghost">
+                <a href="/admin/orders">Ver ventas registradas</a>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

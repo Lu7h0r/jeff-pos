@@ -148,8 +148,12 @@
   },
   "cashier": {
     "title": "Caja",
+    "blockedState": "Bloqueado hasta seleccionar local",
+    "titleBlocked": "Selecciona un local antes de abrir caja",
     "selectLocation": "Selecciona un local para operar la caja.",
     "noLocationDetail": "No hay un local activo seleccionado. Usa el selector en la barra superior y vuelve a esta página.",
+    "selectLocationHint": "Selecciona el local desde el switcher de la barra superior y luego regresa a Caja.",
+    "goToAdmin": "Ir al panel para seleccionar local",
     "openTitle": "Abrir caja",
     "openSubtitle": "Inicia una nueva caja para este local. El monto de apertura es el efectivo que está físicamente en la caja en este momento.",
     "openingCash": "Efectivo de apertura",

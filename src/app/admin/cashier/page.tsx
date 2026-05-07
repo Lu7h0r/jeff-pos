@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2Icon } from "lucide-react";
+import { Loader2Icon, LockIcon, MapPinIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   Card,
@@ -46,15 +46,30 @@ export default function CashierPage() {
 function NoLocationSelected() {
   const t = useTranslations("cashier");
   return (
-    <Card>
+    <Card className="border-dashed">
       <CardHeader>
-        <CardTitle>{t("title")}</CardTitle>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <LockIcon className="h-4 w-4" />
+          <span className="text-xs font-medium uppercase tracking-wide">
+            {t("blockedState")}
+          </span>
+        </div>
+        <CardTitle>{t("titleBlocked")}</CardTitle>
         <CardDescription>{t("selectLocation")}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
           {t("noLocationDetail")}
         </p>
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+          <p className="flex items-start gap-2">
+            <MapPinIcon className="mt-0.5 h-4 w-4" />
+            <span>{t("selectLocationHint")}</span>
+          </p>
+        </div>
+        <Button asChild>
+          <a href="/admin">{t("goToAdmin")}</a>
+        </Button>
       </CardContent>
     </Card>
   );
