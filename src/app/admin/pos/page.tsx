@@ -1390,6 +1390,16 @@ export default function POSPage() {
               </div>
             ) : null}
 
+            <div className="rounded-md border border-dashed bg-muted/20 p-3 space-y-2">
+              <p className="text-sm font-medium">{t("serviceFlowGuideTitle")}</p>
+              <ol className="list-decimal pl-5 text-xs text-muted-foreground space-y-1">
+                <li>{t("serviceFlowGuideStep1")}</li>
+                <li>{t("serviceFlowGuideStep2")}</li>
+                <li>{t("serviceFlowGuideStep3")}</li>
+                <li>{t("serviceFlowGuideStep4")}</li>
+              </ol>
+            </div>
+
             <div className="rounded-md border p-3 space-y-2">
               <p className="text-sm font-medium">{t("sessionsCreateTitle")}</p>
               <div className="grid gap-1">
