@@ -8,6 +8,8 @@ import { assertLocationAllowed } from "../scope-guards";
 import {
   serviceAgreements,
   serviceAgreementPayments,
+  serviceAgreementSessions,
+  serviceAgreementCommissions,
   locations,
   businessMembers,
   paymentMethods,
@@ -16,6 +18,7 @@ import {
   orderPayments,
   cashMovements,
   customers,
+  staffMembers,
 } from "@/lib/db/schema";
 
 const agreementStatusSchema = z.enum(["active", "completed", "cancelled"]);
@@ -30,6 +33,7 @@ const agreementSchema = z.object({
   total_agreed_amount: z.number(),
   total_paid_amount: z.number(),
   pending_amount: z.number(),
+  default_commission_rate_bps: z.number(),
   status: agreementStatusSchema,
   notes: z.string().nullable(),
   created_at: z.date().nullable(),
@@ -51,6 +55,54 @@ const agreementPaymentSchema = z.object({
 const agreementWithPaymentsSchema = agreementSchema.extend({
   payments: z.array(agreementPaymentSchema),
 });
+
+const agreementSessionStatusSchema = z.enum([
+  "scheduled",
+  "completed",
+  "cancelled",
+]);
+
+const agreementSessionSchema = z.object({
+  id: z.number(),
+  service_agreement_id: z.number(),
+  business_id: z.number(),
+  location_id: z.number(),
+  staff_member_id: z.number(),
+  scheduled_for: z.date().nullable(),
+  session_amount: z.number(),
+  commission_rate_bps: z.number(),
+  status: agreementSessionStatusSchema,
+  notes: z.string().nullable(),
+  created_by_user_id: z.string(),
+  created_at: z.date().nullable(),
+  updated_at: z.date().nullable(),
+});
+
+const agreementCommissionSchema = z.object({
+  id: z.number(),
+  service_agreement_id: z.number(),
+  service_agreement_session_id: z.number(),
+  business_id: z.number(),
+  location_id: z.number(),
+  staff_member_id: z.number(),
+  commission_base_amount: z.number(),
+  commission_rate_bps: z.number(),
+  commission_amount: z.number(),
+  status: z.enum(["estimated", "liquidated", "voided"]),
+  notes: z.string().nullable(),
+  calculated_by_user_id: z.string(),
+  created_at: z.date().nullable(),
+  updated_at: z.date().nullable(),
+});
+
+const agreementSessionWithCommissionSchema = z.object({
+  session: agreementSessionSchema,
+  commission: agreementCommissionSchema,
+});
+
+function computeCommissionAmount(baseAmount: number, rateBps: number): number {
+  return Math.floor((baseAmount * rateBps) / 10_000);
+}
 
 async function assertMembership(userId: string, businessId: number) {
   const [m] = await db
@@ -153,6 +205,7 @@ export const serviceAgreementsRouter = router({
         customerId: z.number().int().positive().optional(),
         serviceName: z.string().trim().min(1).max(255),
         totalAgreedAmount: z.number().int().positive(),
+        defaultCommissionRateBps: z.number().int().min(0).max(10_000).optional(),
         notes: z.string().optional(),
       }),
     )
@@ -198,6 +251,7 @@ export const serviceAgreementsRouter = router({
           total_agreed_amount: input.totalAgreedAmount,
           total_paid_amount: 0,
           pending_amount: input.totalAgreedAmount,
+          default_commission_rate_bps: input.defaultCommissionRateBps ?? 3000,
           status: "active",
           notes: input.notes ?? null,
         })
@@ -206,6 +260,226 @@ export const serviceAgreementsRouter = router({
       return {
         ...created,
         status: agreementStatusSchema.parse(created.status),
+      };
+    }),
+
+  createSession: operationalRole
+    .input(
+      z.object({
+        agreementId: z.number().int().positive(),
+        staffMemberId: z.number().int().positive(),
+        scheduledFor: z.date(),
+        sessionAmount: z.number().int().min(0),
+        commissionRateBps: z.number().int().min(0).max(10_000).optional(),
+        notes: z.string().optional(),
+      }),
+    )
+    .output(agreementSessionWithCommissionSchema)
+    .mutation(async ({ ctx, input }) => {
+      const [agreement] = await db
+        .select()
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.id, input.agreementId))
+        .limit(1);
+      if (!agreement) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agreement not found" });
+      }
+      await assertMembership(ctx.user.id, agreement.business_id);
+      assertLocationAllowed(ctx, agreement.location_id);
+
+      const [staff] = await db
+        .select()
+        .from(staffMembers)
+        .where(eq(staffMembers.id, input.staffMemberId))
+        .limit(1);
+      if (!staff) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Staff member not found" });
+      }
+      if (staff.business_id !== agreement.business_id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Staff member belongs to a different business",
+        });
+      }
+
+      const commissionRateBps =
+        input.commissionRateBps ?? agreement.default_commission_rate_bps;
+      const commissionAmount = computeCommissionAmount(
+        input.sessionAmount,
+        commissionRateBps,
+      );
+
+      return await db.transaction(async (tx) => {
+        const [session] = await tx
+          .insert(serviceAgreementSessions)
+          .values({
+            service_agreement_id: agreement.id,
+            business_id: agreement.business_id,
+            location_id: agreement.location_id,
+            staff_member_id: input.staffMemberId,
+            scheduled_for: input.scheduledFor,
+            session_amount: input.sessionAmount,
+            commission_rate_bps: commissionRateBps,
+            status: "scheduled",
+            notes: input.notes ?? null,
+            created_by_user_id: ctx.user.id,
+          })
+          .returning();
+
+        const [commission] = await tx
+          .insert(serviceAgreementCommissions)
+          .values({
+            service_agreement_id: agreement.id,
+            service_agreement_session_id: session.id,
+            business_id: agreement.business_id,
+            location_id: agreement.location_id,
+            staff_member_id: input.staffMemberId,
+            commission_base_amount: input.sessionAmount,
+            commission_rate_bps: commissionRateBps,
+            commission_amount: commissionAmount,
+            status: "estimated",
+            notes: input.notes ?? null,
+            calculated_by_user_id: ctx.user.id,
+          })
+          .returning();
+
+        return {
+          session: {
+            ...session,
+            status: agreementSessionStatusSchema.parse(session.status),
+          },
+          commission: {
+            ...commission,
+            status: agreementCommissionSchema.shape.status.parse(commission.status),
+          },
+        };
+      });
+    }),
+
+  listSessions: protectedProcedure
+    .input(
+      z.object({
+        agreementId: z.number().int().positive(),
+      }),
+    )
+    .output(z.array(agreementSessionWithCommissionSchema))
+    .query(async ({ ctx, input }) => {
+      const [agreement] = await db
+        .select()
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.id, input.agreementId))
+        .limit(1);
+      if (!agreement) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agreement not found" });
+      }
+      await assertMembership(ctx.user.id, agreement.business_id);
+      assertLocationAllowed(ctx, agreement.location_id);
+
+      const rows = await db
+        .select({
+          session: serviceAgreementSessions,
+          commission: serviceAgreementCommissions,
+        })
+        .from(serviceAgreementSessions)
+        .innerJoin(
+          serviceAgreementCommissions,
+          eq(
+            serviceAgreementCommissions.service_agreement_session_id,
+            serviceAgreementSessions.id,
+          ),
+        )
+        .where(eq(serviceAgreementSessions.service_agreement_id, agreement.id))
+        .orderBy(desc(serviceAgreementSessions.scheduled_for));
+
+      return rows.map((row) => ({
+        session: {
+          ...row.session,
+          status: agreementSessionStatusSchema.parse(row.session.status),
+        },
+        commission: {
+          ...row.commission,
+          status: agreementCommissionSchema.shape.status.parse(
+            row.commission.status,
+          ),
+        },
+      }));
+    }),
+
+  updateSessionStatus: operationalRole
+    .input(
+      z.object({
+        sessionId: z.number().int().positive(),
+        status: agreementSessionStatusSchema,
+      }),
+    )
+    .output(agreementSessionSchema)
+    .mutation(async ({ ctx, input }) => {
+      const [session] = await db
+        .select()
+        .from(serviceAgreementSessions)
+        .where(eq(serviceAgreementSessions.id, input.sessionId))
+        .limit(1);
+      if (!session) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      }
+
+      await assertMembership(ctx.user.id, session.business_id);
+      assertLocationAllowed(ctx, session.location_id);
+
+      const [updated] = await db
+        .update(serviceAgreementSessions)
+        .set({
+          status: input.status,
+          updated_at: sql`NOW()`,
+        })
+        .where(eq(serviceAgreementSessions.id, session.id))
+        .returning();
+
+      return {
+        ...updated,
+        status: agreementSessionStatusSchema.parse(updated.status),
+      };
+    }),
+
+  getCommissionSummary: protectedProcedure
+    .input(
+      z.object({
+        agreementId: z.number().int().positive(),
+      }),
+    )
+    .output(
+      z.object({
+        agreementId: z.number(),
+        estimatedCommissionAmount: z.number(),
+        sessionCount: z.number(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const [agreement] = await db
+        .select()
+        .from(serviceAgreements)
+        .where(eq(serviceAgreements.id, input.agreementId))
+        .limit(1);
+      if (!agreement) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Agreement not found" });
+      }
+
+      await assertMembership(ctx.user.id, agreement.business_id);
+      assertLocationAllowed(ctx, agreement.location_id);
+
+      const [summary] = await db
+        .select({
+          estimatedCommissionAmount:
+            sql<number>`COALESCE(SUM(${serviceAgreementCommissions.commission_amount}), 0)`,
+          sessionCount: sql<number>`COUNT(*)`,
+        })
+        .from(serviceAgreementCommissions)
+        .where(eq(serviceAgreementCommissions.service_agreement_id, agreement.id));
+
+      return {
+        agreementId: agreement.id,
+        estimatedCommissionAmount: summary?.estimatedCommissionAmount ?? 0,
+        sessionCount: summary?.sessionCount ?? 0,
       };
     }),
 

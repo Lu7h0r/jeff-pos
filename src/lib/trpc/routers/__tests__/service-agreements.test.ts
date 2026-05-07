@@ -16,11 +16,14 @@ const callerAs = (uid: string, businessId?: number) =>
 let bizJeffId: number;
 let bizOtherId: number;
 let amparoId: number;
+let britaliaId: number;
 let customerId: number;
 let pmCashId: number;
 let pmTransferId: number;
 let pmOtherBizId: number;
 let openSessionId: number;
+let staffJeffId: number;
+let staffOtherId: number;
 
 beforeAll(async () => {
   await pg.exec(SCHEMA_DDL);
@@ -50,6 +53,12 @@ beforeAll(async () => {
     .values({ business_id: bizJeffId, name: "Amparo", slug: "amparo" })
     .returning();
   amparoId = location.id;
+
+  const [otherLocation] = await db
+    .insert(schema.locations)
+    .values({ business_id: bizJeffId, name: "Britalia", slug: "britalia" })
+    .returning();
+  britaliaId = otherLocation.id;
 
   const [customer] = await db
     .insert(schema.customers)
@@ -87,6 +96,16 @@ beforeAll(async () => {
     })
     .returning();
   openSessionId = session.id;
+
+  const [staffJeff, staffOther] = await db
+    .insert(schema.staffMembers)
+    .values([
+      { business_id: bizJeffId, display_name: "Artist Jeff", default_split: "staff_30_house_70" },
+      { business_id: bizOtherId, display_name: "Artist Other", default_split: "staff_30_house_70" },
+    ])
+    .returning();
+  staffJeffId = staffJeff.id;
+  staffOtherId = staffOther.id;
 });
 
 afterAll(async () => {
@@ -178,4 +197,185 @@ describe("serviceAgreements — fase 1", () => {
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  it("filters list by sede scope for location-scoped users", async () => {
+    await jeffCaller().create({
+      locationId: amparoId,
+      serviceName: "Proyecto Amparo",
+      totalAgreedAmount: 100_000,
+    });
+    await jeffCaller().create({
+      locationId: britaliaId,
+      serviceName: "Proyecto Britalia",
+      totalAgreedAmount: 120_000,
+    });
+
+    const scopedCaller = factory(
+      makeContext("u-jeff", {
+        businessId: bizJeffId,
+        role: "manager",
+        isLocationScoped: true,
+        effectiveLocationIds: [amparoId],
+      }),
+    );
+
+    const rows = await scopedCaller.list({});
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => row.location_id === amparoId)).toBe(true);
+  });
+
+  it("rejects create/addPayment for non-operational roles", async () => {
+    const artistCaller = factory(
+      makeContext("u-jeff", {
+        businessId: bizJeffId,
+        role: "artist",
+      }),
+    );
+
+    await expect(
+      artistCaller.create({
+        locationId: amparoId,
+        serviceName: "No permitido",
+        totalAgreedAmount: 50_000,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      serviceName: "Solo operativos",
+      totalAgreedAmount: 80_000,
+    });
+
+    await expect(
+      artistCaller.addPayment({
+        agreementId: agreement.id,
+        paymentLines: [{ paymentMethodId: pmCashId, amount: 10_000 }],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("rejects payments for cancelled agreements", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      serviceName: "Cancelado",
+      totalAgreedAmount: 210_000,
+    });
+
+    await db
+      .update(schema.serviceAgreements)
+      .set({ status: "cancelled" })
+      .where(eq(schema.serviceAgreements.id, agreement.id));
+
+    await expect(
+      jeffCaller().addPayment({
+        agreementId: agreement.id,
+        paymentLines: [{ paymentMethodId: pmCashId, amount: 30_000 }],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+});
+
+describe("serviceAgreements — fase 2 sesiones + comisiones", () => {
+  it("creates a session with commission snapshot using agreement default rate", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      customerId,
+      serviceName: "Tattoo multi sesion",
+      totalAgreedAmount: 1_200_000,
+      defaultCommissionRateBps: 2500,
+    });
+
+    const result = await jeffCaller().createSession({
+      agreementId: agreement.id,
+      staffMemberId: staffJeffId,
+      scheduledFor: new Date("2026-05-10T14:00:00.000Z"),
+      sessionAmount: 400_000,
+      notes: "Sesion linea",
+    });
+
+    expect(result.session.status).toBe("scheduled");
+    expect(result.session.commission_rate_bps).toBe(2500);
+    expect(result.commission.commission_base_amount).toBe(400_000);
+    expect(result.commission.commission_amount).toBe(100_000);
+  });
+
+  it("lists sessions and returns commission summary per agreement", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      serviceName: "Tattoo 2 sesiones",
+      totalAgreedAmount: 900_000,
+      defaultCommissionRateBps: 3000,
+    });
+
+    await jeffCaller().createSession({
+      agreementId: agreement.id,
+      staffMemberId: staffJeffId,
+      scheduledFor: new Date("2026-05-11T14:00:00.000Z"),
+      sessionAmount: 200_000,
+    });
+    await jeffCaller().createSession({
+      agreementId: agreement.id,
+      staffMemberId: staffJeffId,
+      scheduledFor: new Date("2026-05-12T14:00:00.000Z"),
+      sessionAmount: 300_000,
+      commissionRateBps: 3500,
+    });
+
+    const sessions = await jeffCaller().listSessions({ agreementId: agreement.id });
+    expect(sessions.length).toBe(2);
+
+    const summary = await jeffCaller().getCommissionSummary({
+      agreementId: agreement.id,
+    });
+    expect(summary.sessionCount).toBe(2);
+    expect(summary.estimatedCommissionAmount).toBe(165_000);
+  });
+
+  it("updates session status and enforces business isolation", async () => {
+    const agreement = await jeffCaller().create({
+      locationId: amparoId,
+      serviceName: "Tattoo status",
+      totalAgreedAmount: 300_000,
+    });
+
+    const { session } = await jeffCaller().createSession({
+      agreementId: agreement.id,
+      staffMemberId: staffJeffId,
+      scheduledFor: new Date("2026-05-13T14:00:00.000Z"),
+      sessionAmount: 100_000,
+    });
+
+    const updated = await jeffCaller().updateSessionStatus({
+      sessionId: session.id,
+      status: "completed",
+    });
+    expect(updated.status).toBe("completed");
+
+    await expect(
+      callerAs("u-other", bizOtherId).createSession({
+        agreementId: agreement.id,
+        staffMemberId: staffOtherId,
+        scheduledFor: new Date("2026-05-14T14:00:00.000Z"),
+        sessionAmount: 100_000,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("serviceAgreements — fase 2 (prep tests)", () => {
+  it.todo(
+    "creates and lists multiple service sessions per agreement once session model exists",
+  );
+
+  it.todo(
+    "enforces role+sede guards on session create/list endpoints once implemented",
+  );
+
+  it.todo(
+    "calculates agreement commission from configured policy (charged vs completed)",
+  );
+
+  it.todo(
+    "rejects invalid session operations (duplicate invalid, agreement completed/cancelled)",
+  );
 });

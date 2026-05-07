@@ -216,11 +216,72 @@ export const serviceAgreements = pgTable("service_agreements", {
   total_agreed_amount: integer("total_agreed_amount").notNull(),
   total_paid_amount: integer("total_paid_amount").notNull().default(0),
   pending_amount: integer("pending_amount").notNull(),
+  default_commission_rate_bps: integer("default_commission_rate_bps")
+    .notNull()
+    .default(3000),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   notes: text("notes"),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });
+
+export const serviceAgreementSessions = pgTable("service_agreement_sessions", {
+  id: serial("id").primaryKey(),
+  service_agreement_id: integer("service_agreement_id")
+    .notNull()
+    .references(() => serviceAgreements.id),
+  business_id: integer("business_id")
+    .notNull()
+    .references(() => businesses.id),
+  location_id: integer("location_id")
+    .notNull()
+    .references(() => locations.id),
+  staff_member_id: integer("staff_member_id")
+    .notNull()
+    .references(() => staffMembers.id),
+  scheduled_for: timestamp("scheduled_for").notNull(),
+  session_amount: integer("session_amount").notNull().default(0),
+  commission_rate_bps: integer("commission_rate_bps").notNull().default(3000),
+  status: varchar("status", { length: 20 }).notNull().default("scheduled"),
+  notes: text("notes"),
+  created_by_user_id: text("created_by_user_id")
+    .notNull()
+    .references(() => user.id),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+export const serviceAgreementCommissions = pgTable(
+  "service_agreement_commissions",
+  {
+    id: serial("id").primaryKey(),
+    service_agreement_id: integer("service_agreement_id")
+      .notNull()
+      .references(() => serviceAgreements.id),
+    service_agreement_session_id: integer("service_agreement_session_id")
+      .notNull()
+      .references(() => serviceAgreementSessions.id),
+    business_id: integer("business_id")
+      .notNull()
+      .references(() => businesses.id),
+    location_id: integer("location_id")
+      .notNull()
+      .references(() => locations.id),
+    staff_member_id: integer("staff_member_id")
+      .notNull()
+      .references(() => staffMembers.id),
+    commission_base_amount: integer("commission_base_amount").notNull(),
+    commission_rate_bps: integer("commission_rate_bps").notNull(),
+    commission_amount: integer("commission_amount").notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("estimated"),
+    notes: text("notes"),
+    calculated_by_user_id: text("calculated_by_user_id")
+      .notNull()
+      .references(() => user.id),
+    created_at: timestamp("created_at").defaultNow(),
+    updated_at: timestamp("updated_at").defaultNow(),
+  },
+);
 
 export const serviceAgreementPayments = pgTable("service_agreement_payments", {
   id: serial("id").primaryKey(),
@@ -309,6 +370,65 @@ export const serviceAgreementsRelations = relations(
       references: [user.id],
     }),
     payments: many(serviceAgreementPayments),
+    sessions: many(serviceAgreementSessions),
+    commissions: many(serviceAgreementCommissions),
+  }),
+);
+
+export const serviceAgreementSessionsRelations = relations(
+  serviceAgreementSessions,
+  ({ one, many }) => ({
+    agreement: one(serviceAgreements, {
+      fields: [serviceAgreementSessions.service_agreement_id],
+      references: [serviceAgreements.id],
+    }),
+    business: one(businesses, {
+      fields: [serviceAgreementSessions.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [serviceAgreementSessions.location_id],
+      references: [locations.id],
+    }),
+    staffMember: one(staffMembers, {
+      fields: [serviceAgreementSessions.staff_member_id],
+      references: [staffMembers.id],
+    }),
+    createdBy: one(user, {
+      fields: [serviceAgreementSessions.created_by_user_id],
+      references: [user.id],
+    }),
+    commissions: many(serviceAgreementCommissions),
+  }),
+);
+
+export const serviceAgreementCommissionsRelations = relations(
+  serviceAgreementCommissions,
+  ({ one }) => ({
+    agreement: one(serviceAgreements, {
+      fields: [serviceAgreementCommissions.service_agreement_id],
+      references: [serviceAgreements.id],
+    }),
+    session: one(serviceAgreementSessions, {
+      fields: [serviceAgreementCommissions.service_agreement_session_id],
+      references: [serviceAgreementSessions.id],
+    }),
+    business: one(businesses, {
+      fields: [serviceAgreementCommissions.business_id],
+      references: [businesses.id],
+    }),
+    location: one(locations, {
+      fields: [serviceAgreementCommissions.location_id],
+      references: [locations.id],
+    }),
+    staffMember: one(staffMembers, {
+      fields: [serviceAgreementCommissions.staff_member_id],
+      references: [staffMembers.id],
+    }),
+    calculatedBy: one(user, {
+      fields: [serviceAgreementCommissions.calculated_by_user_id],
+      references: [user.id],
+    }),
   }),
 );
 
@@ -942,6 +1062,8 @@ export const staffMembersRelations = relations(
     serviceSales: many(serviceSales),
     commissionEstimates: many(commissionEstimates),
     stationRentals: many(stationRentals),
+    agreementSessions: many(serviceAgreementSessions),
+    agreementCommissions: many(serviceAgreementCommissions),
   }),
 );
 
