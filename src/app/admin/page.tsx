@@ -179,58 +179,72 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Onboarding quick-flow (v1) */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle>¿Cómo empezar? Flujo recomendado</CardTitle>
+          <CardTitle>Guía rápida por sección</CardTitle>
           <CardDescription>
-            Guía rápida para turnos con rotación entre locales.
+            Atajos del sidebar con una referencia breve para el turno actual.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg border bg-muted/20 p-4">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold">Flujo 1 — Apertura de caja</h3>
+              <h3 className="text-sm font-semibold">Flujo recomendado de apertura</h3>
               <Badge variant="secondary">Inicio de turno</Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Sigue estos pasos al iniciar turno para vender en el local correcto.
+              1) Selecciona el local activo. 2) Abre caja. 3) Registra ventas en POS.
             </p>
-            <ol className="mt-3 space-y-2 text-sm">
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-xs font-medium">1</span>
-                <span>
-                  Selecciona el <strong>local de trabajo</strong> en el switcher de
-                  la barra superior.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-xs font-medium">2</span>
-                <span>
-                  Entra a <strong>Caja</strong> y registra el monto inicial para
-                  dejarla en estado <strong>abierta</strong>.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border text-xs font-medium">3</span>
-                <span>Pasa a <strong>POS</strong> para registrar ventas del turno.</span>
-              </li>
-            </ol>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <a href="/admin/cashier">
-                  Ir a Caja <ChevronRightIcon className="ml-1 h-4 w-4" />
-                </a>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <a href="/admin/pos">
-                  Ir a POS <ChevronRightIcon className="ml-1 h-4 w-4" />
-                </a>
-              </Button>
-              <Button asChild size="sm" variant="ghost">
-                <a href="/admin/orders">Ver ventas registradas</a>
-              </Button>
-            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {[
+              {
+                title: "Panel",
+                hint: "Resumen operativo de ventas, caja y alertas de stock.",
+                href: "/admin",
+                cta: "Ver panel",
+              },
+              {
+                title: "Caja",
+                hint: "Abre o cierra turno y valida efectivo esperado contra contado.",
+                href: "/admin/cashier",
+                cta: "Ir a Caja",
+              },
+              {
+                title: "POS",
+                hint: "Busca productos o servicios, arma carrito y confirma venta.",
+                href: "/admin/pos",
+                cta: "Ir a POS",
+              },
+              {
+                title: "Inventario",
+                hint: "Consulta existencias, ajusta stock y transfiere entre locales.",
+                href: "/admin/inventory",
+                cta: "Ver inventario",
+              },
+              {
+                title: "Ventas",
+                hint: "Revisa historial de órdenes, filtros y estado de anulaciones.",
+                href: "/admin/orders",
+                cta: "Ver ventas",
+              },
+              {
+                title: "Clientes",
+                hint: "Administra clientes para asociar ventas y facilitar seguimiento.",
+                href: "/admin/customers",
+                cta: "Ver clientes",
+              },
+            ].map((item) => (
+              <div key={item.href} className="rounded-lg border p-3">
+                <p className="text-sm font-semibold">{item.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{item.hint}</p>
+                <Button asChild size="sm" variant="ghost" className="mt-3 px-0">
+                  <a href={item.href}>
+                    {item.cta} <ChevronRightIcon className="ml-1 h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

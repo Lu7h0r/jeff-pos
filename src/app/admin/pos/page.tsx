@@ -18,12 +18,16 @@ import { Badge } from "@/components/ui/badge";
 import {
   Loader2Icon,
   MinusIcon,
+  CheckIcon,
   PlusIcon,
   ScissorsIcon,
   SearchIcon,
   Trash2Icon,
   UserIcon,
   PackageIcon,
+  WalletIcon,
+  HandCoinsIcon,
+  ArrowRightLeftIcon,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -305,6 +309,7 @@ export default function POSPage() {
     (sum, p) => sum + (Number.isFinite(p.amount) ? p.amount : 0),
     0,
   );
+  const pendingAmount = Math.max(0, total - paymentsTotal);
   const paymentsMatch = paymentsTotal === total && total > 0;
   const allPaymentsAssigned = paymentLines.every(
     (p) => p.paymentMethodId != null && p.amount > 0,
@@ -433,6 +438,36 @@ export default function POSPage() {
       { paymentMethodId: null, amount: 0 },
     ]);
 
+  const fillSinglePaymentWithTotal = () => {
+    setPaymentLines((prev) => {
+      const current = prev[0] ?? { paymentMethodId: null, amount: 0 };
+      return [{ ...current, amount: total }];
+    });
+  };
+
+  const fillPendingInLastLine = () => {
+    setPaymentLines((prev) => {
+      if (prev.length === 0) return [{ paymentMethodId: null, amount: pendingAmount }];
+      const next = [...prev];
+      const lastIndex = next.length - 1;
+      next[lastIndex] = { ...next[lastIndex], amount: pendingAmount };
+      return next;
+    });
+  };
+
+  const splitPaymentsEvenly = () => {
+    setPaymentLines((prev) => {
+      if (prev.length === 0 || total <= 0) return prev;
+      const perLine = Math.floor(total / prev.length);
+      let remainder = total - perLine * prev.length;
+      return prev.map((line) => {
+        const extra = remainder > 0 ? 1 : 0;
+        remainder -= extra;
+        return { ...line, amount: perLine + extra };
+      });
+    });
+  };
+
   const handleCreate = () => {
     if (!canCreate) return;
     if (unassignedServiceCount > 0) {
@@ -510,7 +545,7 @@ export default function POSPage() {
   const paymentMethods = paymentMethodsQuery.data ?? [];
 
   return (
-    <div className="w-full max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="w-full max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-4 items-start">
       <Card>
         <CardHeader>
           <CardTitle>{t("catalogue")}</CardTitle>
@@ -538,31 +573,45 @@ export default function POSPage() {
             noSelect
             onSelect={(id) => handleAddCatalogueItem(Number(id))}
           />
-          <div className="mt-3 max-h-80 overflow-y-auto text-sm space-y-4">
+          <div className="mt-3 max-h-[65vh] overflow-y-auto text-sm space-y-5 pr-1">
             {groupedCatalogue.services.length > 0 ? (
               <section>
                 <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                   <ScissorsIcon className="h-3.5 w-3.5" /> {t("services")}
                 </h3>
-                <ul className="space-y-1">
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {groupedCatalogue.services.map((c) => (
                     <li
                       key={`svc-${c.productId}`}
-                      className="flex items-center justify-between border-b py-1"
+                      className="h-full"
                     >
                       <button
                         type="button"
                         onClick={() => handleAddCatalogueItem(c.productId)}
-                        className="flex-1 text-left hover:text-primary"
+                        className={`w-full h-full rounded-lg border p-3 text-left transition hover:border-primary/60 hover:bg-muted/30 ${
+                          cart.some((item) => item.productId === c.productId)
+                            ? "border-primary bg-primary/5"
+                            : ""
+                        }`}
                       >
-                        <span className="font-medium">{c.name}</span>
-                        {c.defaultServiceKind ? (
-                          <span className="text-xs text-muted-foreground ml-2">
-                            · {tServiceKind(c.defaultServiceKind)}
-                          </span>
-                        ) : null}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-medium leading-tight">{c.name}</p>
+                            {c.defaultServiceKind ? (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {tServiceKind(c.defaultServiceKind)}
+                              </p>
+                            ) : null}
+                          </div>
+                          {cart.some((item) => item.productId === c.productId) ? (
+                            <CheckIcon className="h-4 w-4 text-primary shrink-0" />
+                          ) : null}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <Badge variant="default">{t("serviceBadge")}</Badge>
+                          <span className="font-semibold">{formatCurrency(c.unitPrice)}</span>
+                        </div>
                       </button>
-                      <Badge variant="default">{t("serviceBadge")}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -574,24 +623,36 @@ export default function POSPage() {
                 <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                   <PackageIcon className="h-3.5 w-3.5" /> {t("products")}
                 </h3>
-                <ul className="space-y-1">
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {groupedCatalogue.products.map((c) => (
                     <li
                       key={`prod-${c.productId}`}
-                      className="flex items-center justify-between border-b py-1"
+                      className="h-full"
                     >
                       <button
                         type="button"
                         onClick={() => handleAddCatalogueItem(c.productId)}
-                        className="flex-1 text-left hover:text-primary"
+                        className={`w-full h-full rounded-lg border p-3 text-left transition hover:border-primary/60 hover:bg-muted/30 ${
+                          cart.some((item) => item.productId === c.productId)
+                            ? "border-primary bg-primary/5"
+                            : ""
+                        }`}
                       >
-                        {c.name}
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium leading-tight">{c.name}</p>
+                          {cart.some((item) => item.productId === c.productId) ? (
+                            <CheckIcon className="h-4 w-4 text-primary shrink-0" />
+                          ) : null}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <Badge
+                            variant={c.onHand > 5 ? "secondary" : "destructive"}
+                          >
+                            {t("onHand", { count: c.onHand })}
+                          </Badge>
+                          <span className="font-semibold">{formatCurrency(c.unitPrice)}</span>
+                        </div>
                       </button>
-                      <Badge
-                        variant={c.onHand > 5 ? "secondary" : "destructive"}
-                      >
-                        {c.onHand}
-                      </Badge>
                     </li>
                   ))}
                 </ul>
@@ -605,7 +666,7 @@ export default function POSPage() {
         </CardContent>
       </Card>
 
-      <div className="space-y-4">
+      <div className="space-y-4 xl:sticky xl:top-20">
         <Card>
           <CardHeader>
             <CardTitle>{t("cart")}</CardTitle>
@@ -742,6 +803,60 @@ export default function POSPage() {
             <p className="mt-3 text-xs text-muted-foreground">
               {t("pricesNote")}
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>{t("financialSummary")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex items-center justify-between rounded-md border p-2">
+              <span className="text-sm text-muted-foreground">{t("agreedTotal")}</span>
+              <strong>{formatCurrency(total)}</strong>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-2">
+              <span className="text-sm text-muted-foreground">{t("paidTotal")}</span>
+              <strong>{formatCurrency(paymentsTotal)}</strong>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-2">
+              <span className="text-sm text-muted-foreground">{t("pendingTotal")}</span>
+              <strong className={pendingAmount > 0 ? "text-amber-700" : ""}>
+                {formatCurrency(pendingAmount)}
+              </strong>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-1 gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fillSinglePaymentWithTotal}
+                disabled={total <= 0}
+                className="justify-start"
+              >
+                <WalletIcon className="mr-2 h-3.5 w-3.5" />
+                {t("quickCollectTotal")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fillPendingInLastLine}
+                disabled={pendingAmount <= 0}
+                className="justify-start"
+              >
+                <HandCoinsIcon className="mr-2 h-3.5 w-3.5" />
+                {t("quickCollectPending")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={splitPaymentsEvenly}
+                disabled={paymentLines.length < 2 || total <= 0}
+                className="justify-start"
+              >
+                <ArrowRightLeftIcon className="mr-2 h-3.5 w-3.5" />
+                {t("quickSplitPayment")}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
