@@ -15,6 +15,7 @@ const TABLES: PgTable[] = [
   schema.businessMembers,
   schema.locations,
   schema.products,
+  schema.productCategories,
   schema.customers,
   schema.paymentMethods,
   // cash_sessions and cash_movements moved before orders because Batch 4

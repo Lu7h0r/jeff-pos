@@ -95,6 +95,7 @@ export default function Products() {
   const tv = useTranslations("validation");
   const trpc = useTRPC();
   const { data: products = [], isLoading } = useQuery(trpc.products.list.queryOptions());
+  const categoriesQuery = useQuery(trpc.products.categories.list.queryOptions());
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -110,11 +111,15 @@ export default function Products() {
   const [isExtraDropzoneActive, setIsExtraDropzoneActive] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [extraImagesUploadError, setExtraImagesUploadError] = useState<string | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const extraImagesInputRef = useRef<HTMLInputElement | null>(null);
 
   const isEditing = editingId !== null;
   const invalidateKeys = trpc.products.list.queryOptions().queryKey;
+  const categoriesKey = trpc.products.categories.list.queryOptions().queryKey;
+  const CREATE_CATEGORY_VALUE = "__create_category__";
 
   const tServiceKind = (k: ServiceKind) => t(`serviceKinds.${k}`);
 
@@ -143,12 +148,31 @@ export default function Products() {
       },
     );
 
-  const categoryFilterOptions: FilterOption[] = [
-    { label: t("categoryAll"), value: "all" },
-    { label: t("categoryElectronics"), value: "electronics" },
-    { label: t("categoryHome"), value: "home" },
-    { label: t("categoryHealth"), value: "health" },
-  ];
+  const categoryOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: Array<{ label: string; value: string }> = [];
+    for (const category of categoriesQuery.data ?? []) {
+      const name = category.name.trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      options.push({ label: name, value: name });
+    }
+    for (const product of products) {
+      const name = product.category?.trim() ?? "";
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      options.push({ label: name, value: name });
+    }
+    return options.sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }, [categoriesQuery.data, products]);
+
+  const categoryFilterOptions: FilterOption[] = useMemo(
+    () => [
+      { label: t("categoryAll"), value: "all" },
+      ...categoryOptions,
+    ],
+    [t, categoryOptions],
+  );
 
   const stockFilterOptions: FilterOption[] = [
     { label: t("stockAll"), value: "all" },
@@ -294,6 +318,13 @@ export default function Products() {
     errorMessage: t("deleteFailed"),
   });
 
+  const createCategoryMutation = useCrudMutation({
+    mutationOptions: trpc.products.categories.create.mutationOptions(),
+    invalidateKeys: categoriesKey,
+    successMessage: t("categoryCreated"),
+    errorMessage: t("categoryCreateFailed"),
+  });
+
   const form = useForm({
     defaultValues: {
       name: "",
@@ -359,6 +390,8 @@ export default function Products() {
     setExtraImagesUploadError(null);
     setIsDropzoneActive(false);
     setIsExtraDropzoneActive(false);
+    setNewCategoryName("");
+    setIsCreatingCategory(false);
     form.reset();
     setIsDialogOpen(true);
   };
@@ -369,6 +402,8 @@ export default function Products() {
     setExtraImagesUploadError(null);
     setIsDropzoneActive(false);
     setIsExtraDropzoneActive(false);
+    setNewCategoryName("");
+    setIsCreatingCategory(false);
     form.reset();
     form.setFieldValue("name", p.name);
     form.setFieldValue("description", p.description ?? "");
@@ -389,6 +424,21 @@ export default function Products() {
       setIsDeleteOpen(false);
       setDeleteId(null);
     }
+  };
+
+  const handleCreateCategory = (onSelectCategory: (value: string) => void) => {
+    const normalizedName = newCategoryName.trim().replace(/\s+/g, " ");
+    if (!normalizedName) return;
+    createCategoryMutation.mutate(
+      { name: normalizedName },
+      {
+        onSuccess: (createdCategory) => {
+          setNewCategoryName("");
+          setIsCreatingCategory(false);
+          onSelectCategory(createdCategory.name);
+        },
+      },
+    );
   };
 
   const validateImageFile = (file: File): string | null => {
@@ -687,15 +737,46 @@ export default function Products() {
                 {(field) => (
                   <div className="flex flex-col sm:grid sm:grid-cols-4 sm:items-center gap-2 sm:gap-4">
                     <Label htmlFor="category" className="sm:text-right">{t("categoryLabel")}</Label>
-                    <Select value={field.state.value} onValueChange={(value) => field.handleChange(value)}>
-                      <SelectTrigger className="col-span-3"><SelectValue placeholder={t("selectCategory")} /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="electronics">{t("categoryElectronics")}</SelectItem>
-                        <SelectItem value="clothing">{t("categoryClothing")}</SelectItem>
-                        <SelectItem value="books">{t("categoryBooks")}</SelectItem>
-                        <SelectItem value="home">{t("categoryHome")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="col-span-3 space-y-2">
+                      <Select
+                        value={field.state.value || undefined}
+                        onValueChange={(value) => {
+                          if (value === CREATE_CATEGORY_VALUE) {
+                            setIsCreatingCategory(true);
+                            setNewCategoryName("");
+                            field.handleChange("");
+                            return;
+                          }
+                          setIsCreatingCategory(false);
+                          field.handleChange(value);
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder={t("selectCategory")} /></SelectTrigger>
+                        <SelectContent>
+                          {categoryOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                          ))}
+                          <SelectItem value={CREATE_CATEGORY_VALUE}>{t("categoryCreateAction")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isCreatingCategory ? (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <Input
+                            value={newCategoryName}
+                            onChange={(event) => setNewCategoryName(event.target.value)}
+                            placeholder={t("categoryNamePlaceholder")}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={createCategoryMutation.isPending || newCategoryName.trim().length === 0}
+                            onClick={() => handleCreateCategory(field.handleChange)}
+                          >
+                            {t("categoryCreateButton")}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 )}
               </form.Field>

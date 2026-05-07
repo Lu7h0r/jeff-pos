@@ -3,8 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../init";
 import { ownerOrManager } from "../role-guards";
 import { db } from "@/lib/db";
-import { products } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { productCategories, products } from "@/lib/db/schema";
+import { eq, and, asc } from "drizzle-orm";
 
 const productKindSchema = z.enum(["product", "service"]);
 
@@ -35,6 +35,17 @@ const productSchema = z.object({
   default_service_kind: serviceKindSchema.nullable(),
   created_at: z.date().nullable(),
 });
+
+const productCategorySchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  business_id: z.number(),
+  created_at: z.date().nullable(),
+});
+
+function normalizeCategoryName(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
 
 function parseImageUrls(raw: string | null): string[] {
   if (!raw) return [];
@@ -152,6 +163,52 @@ export const productsRouter = router({
         .where(eq(products.business_id, ctx.activeBusinessId));
       return rows.map((r) => toProductOutput(r));
     }),
+
+  categories: router({
+    list: protectedProcedure
+      .input(z.void())
+      .output(z.array(productCategorySchema))
+      .query(async ({ ctx }) => {
+        if (ctx.activeBusinessId == null) return [];
+        return db
+          .select()
+          .from(productCategories)
+          .where(eq(productCategories.business_id, ctx.activeBusinessId))
+          .orderBy(asc(productCategories.name));
+      }),
+
+    create: ownerOrManager
+      .input(z.object({ name: z.string().min(1).max(50) }))
+      .output(productCategorySchema)
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.activeBusinessId == null) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "An active business is required to create product categories",
+          });
+        }
+
+        const normalizedName = normalizeCategoryName(input.name);
+        const existing = await db
+          .select()
+          .from(productCategories)
+          .where(eq(productCategories.business_id, ctx.activeBusinessId));
+        const duplicate = existing.find(
+          (category) =>
+            category.name.trim().toLowerCase() === normalizedName.toLowerCase(),
+        );
+        if (duplicate) return duplicate;
+
+        const [created] = await db
+          .insert(productCategories)
+          .values({
+            business_id: ctx.activeBusinessId,
+            name: normalizedName,
+          })
+          .returning();
+        return created;
+      }),
+  }),
 
   create: ownerOrManager
     .input(createInputSchema)

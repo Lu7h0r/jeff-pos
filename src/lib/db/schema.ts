@@ -6,6 +6,8 @@ import {
   integer,
   timestamp,
   boolean,
+  index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { user } from "./auth-schema";
@@ -93,6 +95,25 @@ export const products = pgTable("products", {
   default_service_kind: varchar("default_service_kind", { length: 30 }),
   created_at: timestamp("created_at").defaultNow(),
 });
+
+export const productCategories = pgTable(
+  "product_categories",
+  {
+    id: serial("id").primaryKey(),
+    business_id: integer("business_id")
+      .notNull()
+      .references(() => businesses.id),
+    name: varchar("name", { length: 50 }).notNull(),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("product_categories_business_idx").on(table.business_id),
+    uniqueIndex("product_categories_business_name_uidx").on(
+      table.business_id,
+      table.name,
+    ),
+  ],
+);
 
 // ── Customers ───────────────────────────────────────────────────────────────
 // business_id added nullable in Batch 1 (DA-4). Backfill and query migration

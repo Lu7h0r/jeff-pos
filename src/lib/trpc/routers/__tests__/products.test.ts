@@ -23,6 +23,16 @@ const caller = {
     factory(makeContext("user-1", { businessId: bizUser1Id })).update(input),
   delete: (input: Parameters<ReturnType<typeof factory>["delete"]>[0]) =>
     factory(makeContext("user-1", { businessId: bizUser1Id })).delete(input),
+  listCategories: () =>
+    factory(makeContext("user-1", { businessId: bizUser1Id })).categories.list(),
+  createCategory: (
+    input: Parameters<
+      ReturnType<typeof factory>["categories"]["create"]
+    >[0],
+  ) =>
+    factory(makeContext("user-1", { businessId: bizUser1Id })).categories.create(
+      input,
+    ),
 };
 const callerAs = (uid: string, businessId: number) =>
   factory(makeContext(uid, { businessId }));
@@ -163,6 +173,27 @@ describe("products.create", () => {
     await expect(caller.create({ name: "Bad", price: 100, in_stock: -1 })).rejects.toThrow();
     const after = await caller.list();
     expect(after.length).toBe(before.length);
+  });
+});
+
+describe("products.categories", () => {
+  it("creates and lists categories scoped by active business", async () => {
+    await caller.createCategory({ name: "Aftercare" });
+
+    const mine = await caller.listCategories();
+    expect(mine.some((c) => c.name === "Aftercare")).toBe(true);
+
+    const other = callerAs("other-user", bizOtherId);
+    const otherList = await other.categories.list();
+    expect(otherList.some((c) => c.name === "Aftercare")).toBe(false);
+  });
+
+  it("reuses existing category when name only differs by spaces/case", async () => {
+    const created = await caller.createCategory({ name: "Insumos" });
+    const duplicate = await caller.createCategory({ name: "  insumos  " });
+
+    expect(duplicate.id).toBe(created.id);
+    expect(duplicate.name).toBe(created.name);
   });
 });
 

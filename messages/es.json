@@ -721,6 +721,9 @@
     "imageUrlsPlaceholder": "https://img1..., https://img2...",
     "costExceedsPrice": "El costo no puede ser mayor al precio",
     "selectCategory": "Selecciona una categoría",
+    "categoryCreateAction": "+ Crear categoría",
+    "categoryNamePlaceholder": "Nombre de la categoría",
+    "categoryCreateButton": "Guardar categoría",
     "addButton": "Agregar producto",
     "updateButton": "Actualizar producto",
     "created": "Producto creado",
@@ -729,6 +732,8 @@
     "updateFailed": "No se pudo actualizar el producto",
     "deleted": "Producto eliminado",
     "deleteFailed": "No se pudo eliminar el producto",
+    "categoryCreated": "Categoría creada",
+    "categoryCreateFailed": "No se pudo crear la categoría",
     "deleteConfirm": "¿Seguro que quieres eliminar este producto? Esta acción no se puede deshacer.",
     "serviceKinds": {
       "tattoo": "Tatuaje",
