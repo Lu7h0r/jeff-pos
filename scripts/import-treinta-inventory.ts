@@ -358,6 +358,8 @@ async function main() {
           business_id: business.id,
           sku: makeSku(row.name),
           cost_amount: row.cost,
+          image_url: null,
+          image_urls_json: null,
           status: "active",
           kind: "product",
           default_service_kind: null,
