@@ -99,6 +99,7 @@ type CatalogueItem = {
   productId: number;
   name: string;
   sku: string | null;
+  imageUrl: string | null;
   kind: ProductKind;
   defaultServiceKind: ServiceKind | null;
   unitPrice: number;
@@ -117,6 +118,32 @@ const SERVICE_KINDS: ServiceKind[] = [
 type PaymentLine = {
   paymentMethodId: number | null;
   amount: number;
+};
+
+type QuickServiceForm = {
+  artistId: string;
+  serviceKind: ServiceKind;
+  serviceName: string;
+  totalAgreedAmount: string;
+  initialPayment: string;
+  paymentMethodId: string;
+  notes: string;
+};
+
+type PosSessionForm = {
+  scheduledFor: string;
+  artistId: string;
+  sessionAmount: string;
+  notes: string;
+};
+
+type AgreementMediaKind = "before" | "after" | "reference" | "consent";
+
+type AgreementMediaForm = {
+  sessionId: string;
+  mediaUrl: string;
+  mediaKind: AgreementMediaKind;
+  caption: string;
 };
 
 function readLocationCookie(): number | null {
@@ -228,6 +255,18 @@ export default function POSPage() {
     }),
   );
 
+  const createServiceAgreementMutation = useMutation(
+    trpc.serviceAgreements.create.mutationOptions(),
+  );
+
+  const addServiceAgreementPaymentMutation = useMutation(
+    trpc.serviceAgreements.addPayment.mutationOptions(),
+  );
+  const agreementsQuery = useQuery({
+    ...trpc.serviceAgreements.list.queryOptions({ locationId: locationId ?? 0 }),
+    enabled: locationId != null && sessionQuery.data != null,
+  });
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
     null,
@@ -245,8 +284,286 @@ export default function POSPage() {
     serviceKind: ServiceKind;
     bodyLocation: string;
   }>({ staffMemberId: "", serviceKind: "tattoo", bodyLocation: "" });
+  const [quickServiceOpen, setQuickServiceOpen] = useState(false);
+  const [quickServiceForm, setQuickServiceForm] = useState<QuickServiceForm>({
+    artistId: "",
+    serviceKind: "tattoo",
+    serviceName: "",
+    totalAgreedAmount: "",
+    initialPayment: "",
+    paymentMethodId: "",
+    notes: "",
+  });
+  const [quickServiceErrors, setQuickServiceErrors] = useState<
+    Partial<Record<keyof QuickServiceForm, string>>
+  >({});
+  const [quickServiceSubmitting, setQuickServiceSubmitting] = useState(false);
+  const [lastCreatedAgreement, setLastCreatedAgreement] = useState<{
+    id: number;
+    serviceName: string;
+    totalAgreedAmount: number;
+    totalPaidAmount: number;
+    pendingAmount: number;
+  } | null>(null);
+  const [selectedAgreementId, setSelectedAgreementId] = useState<number | null>(null);
+  const [sessionForm, setSessionForm] = useState<PosSessionForm>({
+    scheduledFor: "",
+    artistId: "",
+    sessionAmount: "",
+    notes: "",
+  });
+  const [sessionFormError, setSessionFormError] = useState<string | null>(null);
+  const [mediaForm, setMediaForm] = useState<AgreementMediaForm>({
+    sessionId: "",
+    mediaUrl: "",
+    mediaKind: "reference",
+    caption: "",
+  });
+
+  const sessionsQuery = useQuery({
+    ...trpc.serviceAgreements.listSessions.queryOptions({
+      agreementId: selectedAgreementId ?? 0,
+    }),
+    enabled: selectedAgreementId != null,
+  });
+
+  const mediaQuery = useQuery({
+    ...trpc.serviceAgreements.listMedia.queryOptions({
+      agreementId: selectedAgreementId ?? 0,
+    }),
+    enabled: selectedAgreementId != null,
+  });
+
+  const outboxEventsQuery = useQuery({
+    ...trpc.serviceAgreements.listOutboxEvents.queryOptions({
+      status: "pending",
+      limit: 50,
+    }),
+    enabled: locationId != null && sessionQuery.data != null,
+  });
+
+  const checkFollowUpEvent = async (input: {
+    agreementId: number;
+    sessionId?: number;
+    eventType: "service_session_followup" | "service_payment_followup";
+  }) => {
+    const latest = await queryClient.fetchQuery(
+      trpc.serviceAgreements.listOutboxEvents.queryOptions({
+        status: "pending",
+        limit: 50,
+      }),
+    );
+
+    return latest.find((event) => {
+      if (event.service_agreement_id !== input.agreementId) return false;
+      if (event.event_type !== input.eventType) return false;
+      if (
+        input.sessionId !== undefined &&
+        event.service_agreement_session_id !== input.sessionId
+      ) {
+        return false;
+      }
+      return true;
+    });
+  };
+
+  const createSessionMutation = useMutation(
+    trpc.serviceAgreements.createSession.mutationOptions({
+      onSuccess: async (result) => {
+        await queryClient.invalidateQueries(
+          trpc.serviceAgreements.listSessions.queryOptions({
+            agreementId: selectedAgreementId ?? 0,
+          }),
+        );
+        setSessionForm({
+          scheduledFor: "",
+          artistId: "",
+          sessionAmount: "",
+          notes: "",
+        });
+        setSessionFormError(null);
+        toast.success(t("sessionCreated"));
+        const hasFollowup = await checkFollowUpEvent({
+          agreementId: result.session.service_agreement_id,
+          sessionId: result.session.id,
+          eventType: "service_session_followup",
+        });
+        if (hasFollowup) {
+          toast.success(t("followupEnqueuedSession"));
+        }
+      },
+      onError: (err) => {
+        toast.error(err.message || t("sessionCreateError"));
+      },
+    }),
+  );
+
+  const updateSessionStatusMutation = useMutation(
+    trpc.serviceAgreements.updateSessionStatus.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(
+          trpc.serviceAgreements.listSessions.queryOptions({
+            agreementId: selectedAgreementId ?? 0,
+          }),
+        );
+        toast.success(t("sessionCompleted"));
+      },
+      onError: (err) => {
+        toast.error(err.message || t("sessionStatusError"));
+      },
+    }),
+  );
+
+  const attachAgreementMediaMutation = useMutation(
+    trpc.serviceAgreements.attachMedia.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(
+          trpc.serviceAgreements.listMedia.queryOptions({
+            agreementId: selectedAgreementId ?? 0,
+          }),
+        );
+        setMediaForm((prev) => ({
+          ...prev,
+          mediaUrl: "",
+          caption: "",
+        }));
+        toast.success(t("agreementMediaAttachSuccess"));
+      },
+      onError: (err) => {
+        toast.error(err.message || t("agreementMediaAttachError"));
+      },
+    }),
+  );
 
   const tServiceKind = (k: ServiceKind) => t(`serviceKinds.${k}`);
+
+  const selectedAgreement = useMemo(() => {
+    if (selectedAgreementId == null) return null;
+    return (agreementsQuery.data ?? []).find((a) => a.id === selectedAgreementId) ?? null;
+  }, [agreementsQuery.data, selectedAgreementId]);
+
+  const selectedAgreementCustomer = useMemo(() => {
+    if (selectedAgreement?.customer_id == null) return null;
+    return (
+      (customersQuery.data ?? []).find(
+        (customer) => customer.id === selectedAgreement.customer_id,
+      ) ?? null
+    );
+  }, [customersQuery.data, selectedAgreement]);
+
+  const customerConsentQuery = useQuery({
+    ...trpc.serviceAgreements.getCustomerConsent.queryOptions({
+      customerId: selectedAgreement?.customer_id ?? 0,
+    }),
+    enabled: selectedAgreement?.customer_id != null,
+  });
+
+  const upsertConsentMutation = useMutation(
+    trpc.serviceAgreements.upsertCustomerConsent.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(
+          trpc.serviceAgreements.getCustomerConsent.queryOptions({
+            customerId: selectedAgreement?.customer_id ?? 0,
+          }),
+        );
+        toast.success(t("consentUpdateSuccess"));
+      },
+      onError: (err) => {
+        toast.error(err.message || t("consentUpdateError"));
+      },
+    }),
+  );
+
+  useEffect(() => {
+    if (lastCreatedAgreement) {
+      setSelectedAgreementId(lastCreatedAgreement.id);
+      return;
+    }
+    if (selectedAgreementId != null) return;
+    const first = agreementsQuery.data?.[0];
+    if (first) {
+      setSelectedAgreementId(first.id);
+    }
+  }, [agreementsQuery.data, lastCreatedAgreement, selectedAgreementId]);
+
+  const formatDateTimeForInput = (date: Date) => {
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const scheduleNow = () => {
+    setSessionForm((prev) => ({
+      ...prev,
+      scheduledFor: formatDateTimeForInput(new Date()),
+    }));
+  };
+
+  const createSessionFromPos = () => {
+    if (selectedAgreementId == null) {
+      setSessionFormError(t("sessionValidationAgreement"));
+      return;
+    }
+    const scheduledDate = new Date(sessionForm.scheduledFor);
+    if (!sessionForm.scheduledFor || Number.isNaN(scheduledDate.getTime())) {
+      setSessionFormError(t("sessionValidationDate"));
+      return;
+    }
+    if (!sessionForm.artistId) {
+      setSessionFormError(t("sessionValidationArtist"));
+      return;
+    }
+    const parsedAmount = Math.floor(Number(sessionForm.sessionAmount) || 0);
+    if (parsedAmount < 0) {
+      setSessionFormError(t("sessionValidationAmount"));
+      return;
+    }
+    setSessionFormError(null);
+    createSessionMutation.mutate({
+      agreementId: selectedAgreementId,
+      staffMemberId: Number(sessionForm.artistId),
+      scheduledFor: scheduledDate,
+      sessionAmount: parsedAmount,
+      notes: sessionForm.notes.trim() || undefined,
+    });
+  };
+
+  const markSessionCompleted = (sessionId: number) => {
+    updateSessionStatusMutation.mutate({ sessionId, status: "completed" });
+  };
+
+  const submitAgreementMedia = () => {
+    if (selectedAgreementId == null) {
+      toast.error(t("agreementMediaValidationAgreement"));
+      return;
+    }
+    if (!mediaForm.mediaUrl.trim()) {
+      toast.error(t("agreementMediaValidationUrl"));
+      return;
+    }
+
+    attachAgreementMediaMutation.mutate({
+      agreementId: selectedAgreementId,
+      sessionId: mediaForm.sessionId ? Number(mediaForm.sessionId) : undefined,
+      mediaUrl: mediaForm.mediaUrl.trim(),
+      mediaKind: mediaForm.mediaKind,
+      caption: mediaForm.caption.trim() || undefined,
+    });
+  };
+
+  const updateWhatsAppConsent = (status: "granted" | "revoked") => {
+    if (selectedAgreement?.customer_id == null) {
+      toast.error(t("consentNoCustomer"));
+      return;
+    }
+
+    upsertConsentMutation.mutate({
+      customerId: selectedAgreement.customer_id,
+      locationId: locationId ?? undefined,
+      status,
+      source: "pos",
+      notes: t("consentSourcePos"),
+    });
+  };
 
   // Catalogue assembly: physical products from inventory_balances joined with
   // services from products.list. Services have no on-hand so we plug
@@ -265,6 +582,7 @@ export default function POSPage() {
           productId: b.product_id,
           name: b.product_name,
           sku: b.sku ?? null,
+          imageUrl: product?.image_url ?? product?.image_urls?.[0] ?? null,
           kind: "product" as ProductKind,
           defaultServiceKind: null,
           unitPrice: product?.price ?? 0,
@@ -278,6 +596,7 @@ export default function POSPage() {
         productId: p.id,
         name: p.name,
         sku: null,
+        imageUrl: p.image_url ?? p.image_urls?.[0] ?? null,
         kind: "service" as ProductKind,
         defaultServiceKind: (p.default_service_kind ?? null) as ServiceKind | null,
         unitPrice: p.price,
@@ -543,6 +862,122 @@ export default function POSPage() {
 
   const customers = customersQuery.data ?? [];
   const paymentMethods = paymentMethodsQuery.data ?? [];
+  const selectedCustomer =
+    selectedCustomerId == null
+      ? null
+      : customers.find((c) => c.id === selectedCustomerId) ?? null;
+
+  const openQuickServiceModal = () => {
+    setQuickServiceErrors({});
+    setQuickServiceForm((prev) => ({
+      ...prev,
+      artistId: "",
+      serviceKind: "tattoo",
+      serviceName: "",
+      totalAgreedAmount: "",
+      initialPayment: "",
+      paymentMethodId: "",
+      notes: "",
+    }));
+    setQuickServiceOpen(true);
+  };
+
+  const confirmQuickService = async () => {
+    const nextErrors: Partial<Record<keyof QuickServiceForm, string>> = {};
+    const totalAgreedAmount = Math.floor(Number(quickServiceForm.totalAgreedAmount) || 0);
+    const initialPayment = Math.floor(Number(quickServiceForm.initialPayment) || 0);
+
+    if (!quickServiceForm.artistId) {
+      nextErrors.artistId = t("quickServiceValidationArtist");
+    }
+    if (!quickServiceForm.serviceName.trim()) {
+      nextErrors.serviceName = t("quickServiceValidationName");
+    }
+    if (totalAgreedAmount <= 0) {
+      nextErrors.totalAgreedAmount = t("quickServiceValidationTotal");
+    }
+    if (initialPayment < 0) {
+      nextErrors.initialPayment = t("quickServiceValidationInitial");
+    }
+    if (initialPayment > totalAgreedAmount && totalAgreedAmount > 0) {
+      nextErrors.initialPayment = t("quickServiceValidationInitialExceeds");
+    }
+    if (initialPayment > 0 && !quickServiceForm.paymentMethodId) {
+      nextErrors.paymentMethodId = t("quickServiceValidationPaymentMethod");
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setQuickServiceErrors(nextErrors);
+      return;
+    }
+
+    setQuickServiceErrors({});
+    setQuickServiceSubmitting(true);
+
+    try {
+      const artist = (staffQuery.data ?? []).find(
+        (s) => s.id === Number(quickServiceForm.artistId),
+      );
+      const serviceName = quickServiceForm.serviceName.trim();
+      const composedNotes = [
+        quickServiceForm.notes.trim(),
+        `${t("serviceKindLabel")}: ${tServiceKind(quickServiceForm.serviceKind)}`,
+        artist ? `${t("staff")}: ${artist.display_name}` : null,
+      ]
+        .filter((part): part is string => !!part)
+        .join(" | ");
+
+      const created = await createServiceAgreementMutation.mutateAsync({
+        locationId: locationId!,
+        customerId: selectedCustomerId ?? undefined,
+        serviceName,
+        totalAgreedAmount,
+        notes: composedNotes || undefined,
+      });
+
+      const withPayment =
+        initialPayment > 0
+          ? await addServiceAgreementPaymentMutation.mutateAsync({
+              agreementId: created.id,
+              paymentLines: [
+                {
+                  paymentMethodId: Number(quickServiceForm.paymentMethodId),
+                  amount: initialPayment,
+                },
+              ],
+              notes: t("quickServiceInitialPaymentNote"),
+            })
+          : null;
+
+      if (withPayment) {
+        const hasFollowup = await checkFollowUpEvent({
+          agreementId: withPayment.id,
+          eventType: "service_payment_followup",
+        });
+        if (hasFollowup) {
+          toast.success(t("followupEnqueuedPayment"));
+        }
+      }
+
+      const totals = withPayment ?? created;
+      setLastCreatedAgreement({
+        id: totals.id,
+        serviceName: created.service_name,
+        totalAgreedAmount: totals.total_agreed_amount,
+        totalPaidAmount: totals.total_paid_amount,
+        pendingAmount: totals.pending_amount,
+      });
+      setSelectedAgreementId(created.id);
+      setQuickServiceOpen(false);
+      toast.success(t("quickServiceCreated", { id: created.id }));
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("quickServiceCreateError"),
+      );
+    } finally {
+      setQuickServiceSubmitting(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-4 items-start">
@@ -594,6 +1029,21 @@ export default function POSPage() {
                             : ""
                         }`}
                       >
+                        <div className="mb-3 overflow-hidden rounded-md border bg-muted/20">
+                          {c.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={c.imageUrl}
+                              alt={`Imagen de ${c.name}`}
+                              className="h-24 w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-24 w-full items-center justify-center text-muted-foreground">
+                              <ScissorsIcon className="h-5 w-5" />
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-medium leading-tight">{c.name}</p>
@@ -638,6 +1088,21 @@ export default function POSPage() {
                             : ""
                         }`}
                       >
+                        <div className="mb-3 overflow-hidden rounded-md border bg-muted/20">
+                          {c.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={c.imageUrl}
+                              alt={`Imagen de ${c.name}`}
+                              className="h-24 w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-24 w-full items-center justify-center text-muted-foreground">
+                              <PackageIcon className="h-5 w-5" />
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-start justify-between gap-2">
                           <p className="font-medium leading-tight">{c.name}</p>
                           {cart.some((item) => item.productId === c.productId) ? (
@@ -677,6 +1142,16 @@ export default function POSPage() {
                 onSelect={(id) => setSelectedCustomerId(Number(id))}
               />
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="!mt-3 justify-start"
+              onClick={openQuickServiceModal}
+            >
+              <PlusIcon className="mr-2 h-3.5 w-3.5" />
+              {t("quickServiceAction")}
+            </Button>
           </CardHeader>
           <CardContent>
             {cart.length === 0 ? (
@@ -811,6 +1286,25 @@ export default function POSPage() {
             <CardTitle>{t("financialSummary")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {lastCreatedAgreement ? (
+              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
+                <p className="text-xs font-medium text-emerald-700">
+                  {t("quickServiceSummaryTitle", { id: lastCreatedAgreement.id })}
+                </p>
+                <p className="text-sm">{lastCreatedAgreement.serviceName}</p>
+                <div className="mt-2 grid grid-cols-1 gap-1 text-xs sm:grid-cols-3">
+                  <span>
+                    {t("agreedTotal")}: {formatCurrency(lastCreatedAgreement.totalAgreedAmount)}
+                  </span>
+                  <span>
+                    {t("paidTotal")}: {formatCurrency(lastCreatedAgreement.totalPaidAmount)}
+                  </span>
+                  <span>
+                    {t("pendingTotal")}: {formatCurrency(lastCreatedAgreement.pendingAmount)}
+                  </span>
+                </div>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between rounded-md border p-2">
               <span className="text-sm text-muted-foreground">{t("agreedTotal")}</span>
               <strong>{formatCurrency(total)}</strong>
@@ -857,6 +1351,318 @@ export default function POSPage() {
                 {t("quickSplitPayment")}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("sessionsPanelTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-1">
+              <Label>{t("sessionsAgreementLabel")}</Label>
+              <Select
+                value={selectedAgreementId != null ? String(selectedAgreementId) : ""}
+                onValueChange={(value) => setSelectedAgreementId(Number(value))}
+                disabled={(agreementsQuery.data ?? []).length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("sessionsAgreementPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(agreementsQuery.data ?? []).map((agreement) => (
+                    <SelectItem key={agreement.id} value={String(agreement.id)}>
+                      #{agreement.id} · {agreement.service_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedAgreement ? (
+              <div className="rounded-md border p-2 text-xs text-muted-foreground">
+                <p>
+                  {t("agreedTotal")}: {formatCurrency(selectedAgreement.total_agreed_amount)}
+                </p>
+                <p>
+                  {t("pendingTotal")}: {formatCurrency(selectedAgreement.pending_amount)}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="rounded-md border p-3 space-y-2">
+              <p className="text-sm font-medium">{t("sessionsCreateTitle")}</p>
+              <div className="grid gap-1">
+                <Label>{t("sessionsDateLabel")}</Label>
+                <Input
+                  type="datetime-local"
+                  value={sessionForm.scheduledFor}
+                  onChange={(e) =>
+                    setSessionForm((prev) => ({ ...prev, scheduledFor: e.target.value }))
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start px-0"
+                  onClick={scheduleNow}
+                >
+                  {t("sessionsUseNow")}
+                </Button>
+              </div>
+              <div className="grid gap-1">
+                <Label>{t("staff")}</Label>
+                <Select
+                  value={sessionForm.artistId}
+                  onValueChange={(value) =>
+                    setSessionForm((prev) => ({ ...prev, artistId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("pickStaffMember")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(staffQuery.data ?? []).map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label>{t("sessionsAmountLabel")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={sessionForm.sessionAmount}
+                  onChange={(e) =>
+                    setSessionForm((prev) => ({ ...prev, sessionAmount: e.target.value }))
+                  }
+                  placeholder="0"
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label>{tc("notes")}</Label>
+                <Input
+                  value={sessionForm.notes}
+                  onChange={(e) =>
+                    setSessionForm((prev) => ({ ...prev, notes: e.target.value }))
+                  }
+                  placeholder={t("sessionsNotesPlaceholder")}
+                />
+              </div>
+              {sessionFormError ? (
+                <p className="text-xs text-destructive">{sessionFormError}</p>
+              ) : null}
+              <Button
+                type="button"
+                onClick={createSessionFromPos}
+                disabled={createSessionMutation.isPending || selectedAgreementId == null}
+                className="w-full"
+              >
+                {createSessionMutation.isPending ? (
+                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {t("sessionsCreateAction")}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t("sessionsListTitle")}</p>
+              {sessionsQuery.isLoading ? (
+                <Skeleton className="h-20 w-full" />
+              ) : sessionsQuery.data && sessionsQuery.data.length > 0 ? (
+                sessionsQuery.data.map((entry) => (
+                  <div key={entry.session.id} className="rounded-md border p-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">#{entry.session.id}</span>
+                      <Badge
+                        variant={entry.session.status === "completed" ? "secondary" : "outline"}
+                      >
+                        {tc(entry.session.status)}
+                      </Badge>
+                    </div>
+                    <p>
+                      {t("sessionsDateLabel")}: {entry.session.scheduled_for ? new Date(entry.session.scheduled_for).toLocaleString() : "-"}
+                    </p>
+                    <p>
+                      {t("staff")}: {entry.commission.staff_display_name}
+                    </p>
+                    <p>
+                      {t("sessionsAmountLabel")}: {formatCurrency(entry.session.session_amount)}
+                    </p>
+                    {entry.session.notes ? <p>{tc("notes")}: {entry.session.notes}</p> : null}
+                    {entry.session.status === "scheduled" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => markSessionCompleted(entry.session.id)}
+                        disabled={updateSessionStatusMutation.isPending}
+                      >
+                        {updateSessionStatusMutation.isPending ? (
+                          <Loader2Icon className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        ) : null}
+                        {t("sessionsMarkCompleted")}
+                      </Button>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("sessionsEmpty")}</p>
+              )}
+            </div>
+
+            <div className="rounded-md border p-3 space-y-2">
+              <p className="text-sm font-medium">{t("agreementMediaTitle")}</p>
+              <div className="grid gap-1">
+                <Label>{t("agreementMediaSessionLabel")}</Label>
+                <Select
+                  value={mediaForm.sessionId || "all"}
+                  onValueChange={(value) =>
+                    setMediaForm((prev) => ({
+                      ...prev,
+                      sessionId: value === "all" ? "" : value,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("agreementMediaSessionPlaceholder")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("agreementMediaSessionAll")}</SelectItem>
+                    {(sessionsQuery.data ?? []).map((entry) => (
+                      <SelectItem key={entry.session.id} value={String(entry.session.id)}>
+                        #{entry.session.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label>{t("agreementMediaKindLabel")}</Label>
+                <Select
+                  value={mediaForm.mediaKind}
+                  onValueChange={(value) =>
+                    setMediaForm((prev) => ({
+                      ...prev,
+                      mediaKind: value as AgreementMediaKind,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="before">{t("agreementMediaKinds.before")}</SelectItem>
+                    <SelectItem value="after">{t("agreementMediaKinds.after")}</SelectItem>
+                    <SelectItem value="reference">{t("agreementMediaKinds.reference")}</SelectItem>
+                    <SelectItem value="consent">{t("agreementMediaKinds.consent")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label>{t("agreementMediaUrlLabel")}</Label>
+                <Input
+                  value={mediaForm.mediaUrl}
+                  onChange={(e) =>
+                    setMediaForm((prev) => ({ ...prev, mediaUrl: e.target.value }))
+                  }
+                  placeholder={t("agreementMediaUrlPlaceholder")}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label>{t("agreementMediaCaptionLabel")}</Label>
+                <Input
+                  value={mediaForm.caption}
+                  onChange={(e) =>
+                    setMediaForm((prev) => ({ ...prev, caption: e.target.value }))
+                  }
+                  placeholder={t("agreementMediaCaptionPlaceholder")}
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={submitAgreementMedia}
+                disabled={attachAgreementMediaMutation.isPending || selectedAgreementId == null}
+                className="w-full"
+              >
+                {attachAgreementMediaMutation.isPending ? (
+                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {t("agreementMediaAttachAction")}
+              </Button>
+              <div className="space-y-1">
+                <p className="text-xs font-medium">{t("agreementMediaListTitle")}</p>
+                {mediaQuery.isLoading ? (
+                  <Skeleton className="h-16 w-full" />
+                ) : mediaQuery.data && mediaQuery.data.length > 0 ? (
+                  mediaQuery.data.slice(0, 6).map((media) => (
+                    <div key={media.id} className="rounded-md border p-2 text-xs space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{t(`agreementMediaKinds.${media.media_kind}`)}</span>
+                        {media.service_agreement_session_id ? (
+                          <Badge variant="outline">#{media.service_agreement_session_id}</Badge>
+                        ) : null}
+                      </div>
+                      <a
+                        href={media.media_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline break-all"
+                      >
+                        {media.media_url}
+                      </a>
+                      {media.caption ? <p>{media.caption}</p> : null}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("agreementMediaEmpty")}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-2">
+              <p className="text-sm font-medium">{t("consentTitle")}</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedAgreementCustomer
+                  ? t("consentCustomerLabel", { customer: selectedAgreementCustomer.name })
+                  : t("consentNoCustomer")}
+              </p>
+              <p className="text-xs">
+                {t("consentCurrentStatus")}: {customerConsentQuery.data?.status ? t(`consentStatuses.${customerConsentQuery.data.status}`) : t("consentStatuses.none")}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => updateWhatsAppConsent("granted")}
+                  disabled={
+                    upsertConsentMutation.isPending ||
+                    selectedAgreement?.customer_id == null
+                  }
+                >
+                  {t("consentGrantAction")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => updateWhatsAppConsent("revoked")}
+                  disabled={
+                    upsertConsentMutation.isPending ||
+                    selectedAgreement?.customer_id == null
+                  }
+                >
+                  {t("consentRevokeAction")}
+                </Button>
+              </div>
+            </div>
+
+            {outboxEventsQuery.data && outboxEventsQuery.data.length > 0 ? (
+              <p className="text-xs text-muted-foreground">{t("followupHint")}</p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -931,6 +1737,178 @@ export default function POSPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog
+        open={quickServiceOpen}
+        onOpenChange={(open) => {
+          setQuickServiceOpen(open);
+          if (!open) {
+            setQuickServiceErrors({});
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("quickServiceTitle")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-1">
+              <Label>{t("quickServiceCustomer")}</Label>
+              <p className="text-sm text-muted-foreground">
+                {selectedCustomer ? selectedCustomer.name : t("walkIn")}
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <Label>{t("staff")}</Label>
+              <Select
+                value={quickServiceForm.artistId}
+                onValueChange={(v) =>
+                  setQuickServiceForm((prev) => ({ ...prev, artistId: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("pickStaffMember")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(staffQuery.data ?? []).map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.display_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {quickServiceErrors.artistId ? (
+                <p className="text-xs text-destructive">{quickServiceErrors.artistId}</p>
+              ) : null}
+            </div>
+            <div className="grid gap-1">
+              <Label>{t("serviceKindLabel")}</Label>
+              <Select
+                value={quickServiceForm.serviceKind}
+                onValueChange={(v) =>
+                  setQuickServiceForm((prev) => ({
+                    ...prev,
+                    serviceKind: v as ServiceKind,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SERVICE_KINDS.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {tServiceKind(k)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1">
+              <Label>{t("quickServiceName")}</Label>
+              <Input
+                value={quickServiceForm.serviceName}
+                onChange={(e) =>
+                  setQuickServiceForm((prev) => ({
+                    ...prev,
+                    serviceName: e.target.value,
+                  }))
+                }
+                placeholder={t("quickServiceNamePlaceholder")}
+              />
+              {quickServiceErrors.serviceName ? (
+                <p className="text-xs text-destructive">{quickServiceErrors.serviceName}</p>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid gap-1">
+                <Label>{t("agreedTotal")}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={quickServiceForm.totalAgreedAmount}
+                  onChange={(e) =>
+                    setQuickServiceForm((prev) => ({
+                      ...prev,
+                      totalAgreedAmount: e.target.value,
+                    }))
+                  }
+                  placeholder="0"
+                />
+                {quickServiceErrors.totalAgreedAmount ? (
+                  <p className="text-xs text-destructive">
+                    {quickServiceErrors.totalAgreedAmount}
+                  </p>
+                ) : null}
+              </div>
+              <div className="grid gap-1">
+                <Label>{t("quickServiceInitialPayment")}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={quickServiceForm.initialPayment}
+                  onChange={(e) =>
+                    setQuickServiceForm((prev) => ({
+                      ...prev,
+                      initialPayment: e.target.value,
+                    }))
+                  }
+                  placeholder="0"
+                />
+                {quickServiceErrors.initialPayment ? (
+                  <p className="text-xs text-destructive">{quickServiceErrors.initialPayment}</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="grid gap-1">
+              <Label>{t("paymentMethod")}</Label>
+              <Combobox
+                items={paymentMethods}
+                placeholder={t("paymentMethod")}
+                onSelect={(id) =>
+                  setQuickServiceForm((prev) => ({ ...prev, paymentMethodId: id }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("quickServicePaymentHint")}
+              </p>
+              {quickServiceErrors.paymentMethodId ? (
+                <p className="text-xs text-destructive">
+                  {quickServiceErrors.paymentMethodId}
+                </p>
+              ) : null}
+            </div>
+            <div className="grid gap-1">
+              <Label>{tc("notes")}</Label>
+              <Input
+                value={quickServiceForm.notes}
+                onChange={(e) =>
+                  setQuickServiceForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                placeholder={t("quickServiceNotesPlaceholder")}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setQuickServiceOpen(false)}
+              disabled={quickServiceSubmitting}
+            >
+              {tc("cancel")}
+            </Button>
+            <Button
+              onClick={confirmQuickService}
+              disabled={quickServiceSubmitting}
+            >
+              {quickServiceSubmitting ? (
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {t("quickServiceConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={serviceDialogProductId != null}

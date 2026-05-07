@@ -214,6 +214,30 @@ describe("serviceAgreements — fase 1", () => {
     expect(linkedOrder.total_amount).toBe(80_000);
   });
 
+  it("supports POS quick flow create + same-operation initial payment", async () => {
+    const created = await jeffCaller().create({
+      locationId: amparoId,
+      customerId,
+      serviceName: "Tattoo hombro",
+      totalAgreedAmount: 350_000,
+      notes: "Tipo de servicio: Tatuaje | Artista: Artist Jeff",
+    });
+
+    const updated = await jeffCaller().addPayment({
+      agreementId: created.id,
+      paymentLines: [{ paymentMethodId: pmTransferId, amount: 120_000 }],
+      notes: "Abono inicial desde POS",
+    });
+
+    expect(updated.id).toBe(created.id);
+    expect(updated.total_agreed_amount).toBe(350_000);
+    expect(updated.total_paid_amount).toBe(120_000);
+    expect(updated.pending_amount).toBe(230_000);
+    expect(updated.payments).toHaveLength(1);
+    expect(updated.payments[0].amount).toBe(120_000);
+    expect(updated.payments[0].notes).toBe("Abono inicial desde POS");
+  });
+
   it("marks agreement completed when pending becomes zero", async () => {
     const agreement = await jeffCaller().create({
       locationId: amparoId,
