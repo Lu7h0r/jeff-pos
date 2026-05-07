@@ -272,6 +272,14 @@ erDiagram
         integer in_stock
         varchar user_uid
         varchar category
+        integer business_id FK
+        varchar sku
+        integer cost_amount
+        text image_url
+        text image_urls_json
+        varchar status
+        varchar kind
+        varchar default_service_kind
         timestamp created_at
     }
 
@@ -281,6 +289,7 @@ erDiagram
         varchar email UK
         varchar phone
         varchar user_uid
+        integer business_id FK
         varchar status
         timestamp created_at
     }
@@ -288,6 +297,7 @@ erDiagram
     payment_methods {
         serial id PK
         varchar name UK
+        integer business_id FK
         timestamp created_at
     }
 
@@ -296,7 +306,15 @@ erDiagram
         integer customer_id FK
         integer total_amount
         varchar user_uid
-        varchar status
+        integer business_id FK
+        integer location_id FK
+        integer cash_session_id FK
+        varchar payment_status
+        varchar process_status
+        text voidance_reason
+        timestamp voided_at
+        text voided_by_user_id FK
+        text notes
         timestamp created_at
     }
 
@@ -306,27 +324,23 @@ erDiagram
         integer product_id FK
         integer quantity
         integer price
+        varchar product_name
+        integer unit_price
+        integer unit_cost
+        integer total_price
         timestamp created_at
     }
 
-    transactions {
-        serial id PK
-        text description
-        integer order_id FK
-        integer payment_method_id FK
-        integer amount
-        varchar user_uid
-        varchar type
-        varchar category
-        varchar status
-        timestamp created_at
-    }
-
+    businesses ||--o{ products : "relates to"
+    businesses |o--o{ customers : "relates to"
+    businesses |o--o{ payment_methods : "relates to"
     customers |o--o{ orders : "has"
+    businesses ||--o{ orders : "relates to"
+    locations ||--o{ orders : "relates to"
+    cash_sessions ||--o{ orders : "relates to"
+    user |o--o{ orders : "relates to"
     orders |o--o{ order_items : "contains"
     products |o--o{ order_items : "references"
-    orders |o--o{ transactions : "generates"
-    payment_methods |o--o{ transactions : "uses"
 ```
 
 <!-- ER_END -->
