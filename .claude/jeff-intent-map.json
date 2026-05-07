@@ -1,0 +1,77 @@
+{
+  "_comment": "FinOpenPOS Jeff intent map. Keys match infer_intent() in .claude/hooks/jeff-promptsubmit.py.",
+  "_version": "1.0.0",
+
+  "fix": {
+    "modules": [
+      ".claude/context/domain-concepts.md",
+      ".claude/context/anti-patterns.md"
+    ],
+    "hint": "Bug fix: cambio mínimo, sin refactor fuera del scope. Ver anti-patterns.md para restricciones de multi-tenant."
+  },
+  "schema": {
+    "modules": [
+      ".claude/context/architecture.md",
+      ".claude/context/backend-patterns.md"
+    ],
+    "hint": "Schema change: editar schema.ts → db:generate → db:migrate. Actualizar TABLES en __tests__/helpers.ts si hay tabla nueva."
+  },
+  "sale": {
+    "modules": [
+      ".claude/context/domain-concepts.md",
+      ".claude/context/backend-patterns.md"
+    ],
+    "hint": "Venta atómica: recalcular total desde DB, validar pagos, descontar inventario con guarda atómica, crear movements. Todo en una transacción."
+  },
+  "inventory": {
+    "modules": [
+      ".claude/context/domain-concepts.md",
+      ".claude/context/backend-patterns.md"
+    ],
+    "hint": "Inventario por sede: inventory_balances (stock actual) + inventory_movements (historial). Nunca confiar en products.in_stock."
+  },
+  "staff": {
+    "modules": [
+      ".claude/context/domain-concepts.md"
+    ],
+    "hint": "Staff: commission_estimates son estimaciones manuales. Splits: 70% tatuajes empleadas → Jeff+Jeron 50/50, empleada 30%+base. Jeff tatúa → 100% suyo."
+  },
+  "frontend": {
+    "modules": [
+      ".claude/context/frontend-patterns.md",
+      ".claude/context/anti-patterns.md"
+    ],
+    "hint": "UI: shadcn/ui components, tRPC client-side, LocationSelector para sede activa. Copy en español neutro. Formatear moneda en COP."
+  },
+  "deploy": {
+    "modules": [
+      ".claude/context/workspace-facts.md",
+      ".claude/context/prod-safety.md"
+    ],
+    "hint": "Prod: devir-server, /var/www/sanctum/web, docker-compose.prod.yml. Siempre backup de DB antes de migrar schema."
+  },
+  "test": {
+    "modules": [
+      ".claude/context/backend-patterns.md"
+    ],
+    "hint": "Bun test nativo. Un file por router. TABLES en helpers.ts define orden de cleanup FK. Sin mocks de DB — PGlite real."
+  },
+  "auth": {
+    "modules": [
+      ".claude/context/workspace-facts.md",
+      ".claude/context/anti-patterns.md"
+    ],
+    "hint": "Better Auth con cookie prefix 'sanctum'. El proxy detecta la cookie explícitamente. Loop de login = cookie no detectada o BETTER_AUTH_URL incorrecto."
+  },
+  "architecture": {
+    "modules": [
+      ".claude/context/architecture.md",
+      ".claude/context/backend-patterns.md"
+    ],
+    "hint": "tRPC + Drizzle. Scope multi-tenant en resolveActiveContext(). BROAD vs GRANULAR membership. Ver docs/jeff/PLAN.md para batches."
+  },
+  "default": {
+    "modules": [],
+    "hint": null
+  }
+}
