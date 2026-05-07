@@ -1488,7 +1488,7 @@ export default function POSPage() {
                       {t("sessionsDateLabel")}: {entry.session.scheduled_for ? new Date(entry.session.scheduled_for).toLocaleString() : "-"}
                     </p>
                     <p>
-                      {t("staff")}: {entry.commission.staff_display_name}
+                      {t("staff")}: {(staffQuery.data ?? []).find((s) => s.id === entry.commission.staff_member_id)?.display_name ?? `#${entry.commission.staff_member_id}`}
                     </p>
                     <p>
                       {t("sessionsAmountLabel")}: {formatCurrency(entry.session.session_amount)}
