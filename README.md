@@ -1,8 +1,14 @@
-# FinOpenPOS
+# FinOpenPOS (Jeff Edition)
 
-Open-source Point of Sale (POS) and inventory management system built with Next.js 16, React 19 and embedded PostgreSQL via PGLite. Zero external dependencies to run — `bun dev` and you're set.
+Fork operativo de FinOpenPOS adaptado para Jeff (entorno Sanctum/devir). Mantiene la base del proyecto original y suma ajustes de autenticacion, import de inventario y operacion productiva en servidor.
 
 > **[Leia em Portugues](README.ptBR.md)**
+
+## Contexto de este fork
+
+- Base upstream: `JoaoHenriqueBarbosa/FinOpenPOS`
+- Fork de trabajo: `abautixta/jeff-pos` (branch principal: `jeff-main`)
+- Objetivo: usar FinOpenPOS como base y mantener personalizaciones de Jeff sin perder la capacidad de tomar cambios del upstream.
 
 ## Features
 
@@ -14,6 +20,14 @@ Open-source Point of Sale (POS) and inventory management system built with Next.
 - **Cashier** with income and expense transaction logging
 - **Authentication** with email/password via Better Auth
 - **API Documentation** auto-generated interactive docs via Scalar at `/api/docs`
+
+## Customizaciones para Jeff
+
+- **Auth/prod fix**: hardening para entorno de produccion (cookies/sesion y bootstrap productivo).
+- **Import Treinta**: pipeline para normalizar e importar inventario Treinta a DB (`inventory:import:treinta`).
+- **Metricas de productos**: soporte de metricas orientadas a catalogo/stock para operacion diaria.
+- **Fotos por URL**: carga de fotos de producto por URL para acelerar alta de catalogo.
+- **i18n ES**: localizacion en espanol para operacion del negocio.
 
 ## Architecture
 
@@ -52,7 +66,7 @@ flowchart LR
 ## Quick Start
 
 ```bash
-git clone https://github.com/JoaoHenriqueBarbosa/FinOpenPOS.git
+git clone https://github.com/abautixta/jeff-pos.git
 cd FinOpenPOS
 cp .env.example .env
 ```
@@ -70,6 +84,39 @@ bun run dev
 ```
 
 Open http://localhost:3000 and use the **Fill demo credentials** button to sign in with the test account (`test@example.com` / `test1234`).
+
+## Flujo de repos (origin/upstream)
+
+Config recomendada para mantener fork + sincronizacion con proyecto base:
+
+```bash
+# dentro del repo local
+git remote -v
+
+# origin -> fork de Jeff
+git remote set-url origin git@github.com:abautixta/jeff-pos.git
+
+# upstream -> proyecto base
+git remote add upstream git@github.com:JoaoHenriqueBarbosa/FinOpenPOS.git
+git fetch --all --prune
+```
+
+Flujo sugerido:
+
+```bash
+# 1) Trabajar sobre jeff-main en tu fork
+git checkout jeff-main
+git pull origin jeff-main
+
+# 2) Traer updates del upstream cuando haga falta
+git fetch upstream
+git merge upstream/main
+
+# 3) Resolver conflictos, testear y pushear al fork
+git push origin jeff-main
+```
+
+Deploy productivo: ver `docs/jeff/DEPLOY.md`.
 
 > The first `bun run dev` automatically creates the database at `./data/pglite`, pushes the schema via Drizzle and runs the seed with demo data (20 customers, 32 products, 40 orders, 25 transactions).
 
