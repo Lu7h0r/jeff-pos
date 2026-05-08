@@ -3,7 +3,15 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarPlusIcon } from "lucide-react";
+import {
+  CalendarCheckIcon,
+  CalendarClockIcon,
+  CalendarPlusIcon,
+  CalendarXIcon,
+  CheckCircle2Icon,
+  FileCheck2Icon,
+  HistoryIcon,
+} from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,18 +192,21 @@ export default function BookingsPage() {
         <TableActions>
           <TableActionButton
             onClick={() => setSelectedBookingId(row.id)}
+            icon={<HistoryIcon className="size-4" />}
             label={t("actionHistory")}
           />
           <TableActionButton
             onClick={() =>
               statusMutation.mutate({ bookingId: row.id, status: "confirmed" })
             }
+            icon={<CheckCircle2Icon className="size-4" />}
             label={t("actionConfirm")}
           />
           <TableActionButton
             onClick={() =>
               statusMutation.mutate({ bookingId: row.id, status: "completed" })
             }
+            icon={<CalendarCheckIcon className="size-4" />}
             label={t("actionComplete")}
           />
           <TableActionButton
@@ -209,15 +220,18 @@ export default function BookingsPage() {
                 endsAt: new Date(`${selectedDay}T${nextEnd}:00`),
               });
             }}
+            icon={<CalendarClockIcon className="size-4" />}
             label={t("actionReschedule")}
           />
           <TableActionButton
             variant="danger"
             onClick={() => cancelMutation.mutate({ bookingId: row.id })}
+            icon={<CalendarXIcon className="size-4" />}
             label={tCommon("cancel")}
           />
           <TableActionButton
             onClick={() => convertMutation.mutate({ bookingId: row.id })}
+            icon={<FileCheck2Icon className="size-4" />}
             label={t("actionConvert")}
           />
         </TableActions>
