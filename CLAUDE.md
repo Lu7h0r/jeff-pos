@@ -54,6 +54,15 @@ customers · dashboard
 - **Sin comentarios innecesarios** — nombres autodescriptivos; comentar solo invariantes no obvios
 - **UI/copy del producto:** español neutro (no rioplatense)
 
+## Módulo Agendamientos (obligatorio)
+
+- **Multi-nicho + multi-sede:** agendamientos operan para tattoo/piercing/other y siempre con `business_id` + `location_id` activos.
+- **Create booking:** `staffId` obligatorio, del business activo y respetando scope por sede cuando aplique.
+- **No solape:** rechazar cruces de horario por `staff_id + location_id` en create/reschedule.
+- **Completed:** `status=completed` requiere `service_agreement_id` previo.
+- **Summary:** KPIs filtrados por `startsAt/endsAt` y opcionalmente `locationId`/`staffId`.
+- **Contrato n8n booking events:** outbox con `booking_created|booking_confirmed|booking_rescheduled|booking_cancelled` e `idempotency_key` estable `<event_type>:booking:<booking_id>`.
+
 ## Contexto Extendido (lazy-load via hook)
 
 El hook `.claude/hooks/jeff-promptsubmit.py` inyecta módulos según el intent del prompt.

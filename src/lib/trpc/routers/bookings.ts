@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, gte, gt, inArray, lt, lte, ne, type SQL } from "drizzle-orm";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
 import {
@@ -182,6 +182,43 @@ async function enqueueBookingOutboxEvent(
     });
 }
 
+async function assertBookingNoOverlap(
+  input: {
+    businessId: number;
+    locationId: number;
+    staffId: number;
+    startsAt: Date;
+    endsAt: Date;
+    excludeBookingId?: number;
+  },
+) {
+  const conditions: SQL[] = [
+    eq(bookings.business_id, input.businessId),
+    eq(bookings.location_id, input.locationId),
+    eq(bookings.staff_id, input.staffId),
+    ne(bookings.status, "cancelled"),
+    lt(bookings.starts_at, input.endsAt),
+    gt(bookings.ends_at, input.startsAt),
+  ];
+
+  if (input.excludeBookingId !== undefined) {
+    conditions.push(ne(bookings.id, input.excludeBookingId));
+  }
+
+  const [conflict] = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(and(...conditions))
+    .limit(1);
+
+  if (conflict) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Staff member already has a booking in this time range",
+    });
+  }
+}
+
 export const bookingsRouter = router({
   list: protectedProcedure
     .input(
@@ -252,7 +289,7 @@ export const bookingsRouter = router({
         .object({
           locationId: z.number().int().positive(),
           customerId: z.number().int().positive().optional(),
-          staffId: z.number().int().positive().optional(),
+          staffId: z.number().int().positive(),
           serviceKind: bookingServiceKindSchema,
           title: z.string().trim().min(1).max(255),
           notes: z.string().optional(),
@@ -297,24 +334,31 @@ export const bookingsRouter = router({
         }
       }
 
-      if (input.staffId !== undefined) {
-        const [staff] = await db
-          .select({ id: staffMembers.id })
-          .from(staffMembers)
-          .where(
-            and(
-              eq(staffMembers.id, input.staffId),
-              eq(staffMembers.business_id, businessId),
-            ),
-          )
-          .limit(1);
-        if (!staff) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Staff member belongs to a different business",
-          });
-        }
+      const [staff] = await db
+        .select({ id: staffMembers.id })
+        .from(staffMembers)
+        .where(
+          and(
+            eq(staffMembers.id, input.staffId),
+            eq(staffMembers.business_id, businessId),
+            eq(staffMembers.archived, false),
+          ),
+        )
+        .limit(1);
+      if (!staff) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Staff member belongs to a different business",
+        });
       }
+
+      await assertBookingNoOverlap({
+        businessId,
+        locationId: input.locationId,
+        staffId: input.staffId,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+      });
 
       const created = await db.transaction(async (tx) => {
         const [newBooking] = await tx
@@ -323,7 +367,7 @@ export const bookingsRouter = router({
             business_id: businessId,
             location_id: input.locationId,
             customer_id: input.customerId ?? null,
-            staff_id: input.staffId ?? null,
+            staff_id: input.staffId,
             service_kind: input.serviceKind,
             title: input.title,
             notes: input.notes ?? null,
@@ -454,6 +498,17 @@ export const bookingsRouter = router({
       const businessId = requireBusiness(ctx.activeBusinessId);
       const existing = await loadBookingOwned(input.bookingId, businessId);
       assertLocationAllowed(ctx, existing.location_id);
+
+      if (existing.staff_id != null) {
+        await assertBookingNoOverlap({
+          businessId,
+          locationId: existing.location_id,
+          staffId: existing.staff_id,
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+          excludeBookingId: existing.id,
+        });
+      }
 
       const updated = await db.transaction(async (tx) => {
         const [next] = await tx
@@ -658,7 +713,7 @@ export const bookingsRouter = router({
         if (input.response === "reschedule") {
           const [next] = await tx
             .update(bookings)
-            .set({
+        .set({
               starts_at: input.startsAt!,
               ends_at: input.endsAt!,
               status: "pending",
@@ -721,6 +776,7 @@ export const bookingsRouter = router({
         startsAt: z.date(),
         endsAt: z.date(),
         locationId: z.number().int().positive().optional(),
+        staffId: z.number().int().positive().optional(),
       }),
     )
     .output(
@@ -746,6 +802,7 @@ export const bookingsRouter = router({
           : ctx.isLocationScoped && ctx.effectiveLocationIds.length > 0
             ? inArray(bookings.location_id, ctx.effectiveLocationIds)
             : undefined,
+        input.staffId !== undefined ? eq(bookings.staff_id, input.staffId) : undefined,
       );
 
       const rows = await db.select().from(bookings).where(where);

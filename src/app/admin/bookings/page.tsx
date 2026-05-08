@@ -37,12 +37,28 @@ function endOfDayISO(value: string): string {
   return `${value}T23:59:59.999Z`;
 }
 
+function startOfWeekISO(value: string): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  const day = date.getUTCDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  date.setUTCDate(date.getUTCDate() + diffToMonday);
+  return date.toISOString().slice(0, 10);
+}
+
+function addDaysISO(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export default function BookingsPage() {
   const t = useTranslations("bookings");
   const tCommon = useTranslations("common");
   const trpc = useTRPC();
   const locationsQuery = useQuery(trpc.locations.list.queryOptions());
   const locations = locationsQuery.data ?? [];
+  const staffQuery = useQuery(trpc.staff.list.queryOptions());
+  const staff = staffQuery.data ?? [];
 
   const today = new Date().toISOString().slice(0, 10);
   const [selectedDay, setSelectedDay] = useState(today);
@@ -51,7 +67,13 @@ export default function BookingsPage() {
   const [startsAt, setStartsAt] = useState("10:00");
   const [endsAt, setEndsAt] = useState("11:00");
   const [locationId, setLocationId] = useState<number | null>(null);
+  const [filterStaffId, setFilterStaffId] = useState<number | null>(null);
+  const [createStaffId, setCreateStaffId] = useState<number | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"day" | "week">("day");
+
+  const rangeStartDay = viewMode === "day" ? selectedDay : startOfWeekISO(selectedDay);
+  const rangeEndDay = viewMode === "day" ? selectedDay : addDaysISO(rangeStartDay, 6);
 
   const startsAtDate = useMemo(
     () => new Date(`${selectedDay}T${startsAt}:00`),
@@ -64,24 +86,27 @@ export default function BookingsPage() {
 
   const listQuery = useQuery(
     trpc.bookings.list.queryOptions({
-      startsAt: new Date(startOfDayISO(selectedDay)),
-      endsAt: new Date(endOfDayISO(selectedDay)),
+      startsAt: new Date(startOfDayISO(rangeStartDay)),
+      endsAt: new Date(endOfDayISO(rangeEndDay)),
       locationId: locationId ?? undefined,
+      staffId: filterStaffId ?? undefined,
     }),
   );
 
   const summaryQuery = useQuery(
     trpc.bookings.summary.queryOptions({
-      startsAt: new Date(startOfDayISO(selectedDay)),
-      endsAt: new Date(endOfDayISO(selectedDay)),
+      startsAt: new Date(startOfDayISO(rangeStartDay)),
+      endsAt: new Date(endOfDayISO(rangeEndDay)),
       locationId: locationId ?? undefined,
+      staffId: filterStaffId ?? undefined,
     }),
   );
 
   const invalidateKeys = trpc.bookings.list.queryOptions({
-    startsAt: new Date(startOfDayISO(selectedDay)),
-    endsAt: new Date(endOfDayISO(selectedDay)),
+    startsAt: new Date(startOfDayISO(rangeStartDay)),
+    endsAt: new Date(endOfDayISO(rangeEndDay)),
     locationId: locationId ?? undefined,
+    staffId: filterStaffId ?? undefined,
   }).queryKey;
 
   const createMutation = useCrudMutation({
@@ -163,6 +188,11 @@ export default function BookingsPage() {
     convert_to_service: t("eventConvert"),
   };
 
+  const staffNameById = useMemo(
+    () => new Map(staff.map((member) => [member.id, member.display_name])),
+    [staff],
+  );
+
   const columns: Column<Booking>[] = [
     { key: "title", header: t("colTitle"), className: "font-medium" },
     {
@@ -184,6 +214,12 @@ export default function BookingsPage() {
       key: "confirmation_status",
       header: t("colConfirmation"),
       render: (row) => confirmationLabel[row.confirmation_status],
+    },
+    {
+      key: "staff_id",
+      header: t("colStaff"),
+      render: (row) =>
+        row.staff_id != null ? (staffNameById.get(row.staff_id) ?? `#${row.staff_id}`) : "-",
     },
     {
       key: "actions",
@@ -292,6 +328,36 @@ export default function BookingsPage() {
             />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="booking-view">{t("viewLabel")}</Label>
+            <select
+              id="booking-view"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={viewMode}
+              onChange={(event) => setViewMode(event.target.value as "day" | "week")}
+            >
+              <option value="day">{t("viewDay")}</option>
+              <option value="week">{t("viewWeek")}</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="booking-staff-filter">{t("staffFilter")}</Label>
+            <select
+              id="booking-staff-filter"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={filterStaffId ?? ""}
+              onChange={(event) =>
+                setFilterStaffId(event.target.value ? Number(event.target.value) : null)
+              }
+            >
+              <option value="">{t("allStaff")}</option>
+              {staff.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="booking-location">{tCommon("location")}</Label>
             <select
               id="booking-location"
@@ -311,7 +377,7 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-end">
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="booking-title">{t("quickTitle")}</Label>
             <Input
@@ -335,6 +401,24 @@ export default function BookingsPage() {
             </select>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="booking-staff-create">{t("staffRequired")}</Label>
+            <select
+              id="booking-staff-create"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={createStaffId ?? ""}
+              onChange={(event) =>
+                setCreateStaffId(event.target.value ? Number(event.target.value) : null)
+              }
+            >
+              <option value="">{t("selectStaff")}</option>
+              {staff.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="booking-start">{t("quickStart")}</Label>
             <Input id="booking-start" type="time" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
           </div>
@@ -349,6 +433,7 @@ export default function BookingsPage() {
             onClick={() =>
               createMutation.mutate({
                 locationId: locationId ?? locations[0]?.id ?? 0,
+                staffId: createStaffId ?? 0,
                 serviceKind: kind,
                 title,
                 startsAt: startsAtDate,
@@ -358,6 +443,7 @@ export default function BookingsPage() {
             disabled={
               title.trim().length === 0 ||
               createMutation.isPending ||
+              createStaffId == null ||
               (locationId == null && locations.length === 0)
             }
           >
@@ -373,6 +459,38 @@ export default function BookingsPage() {
           emptyMessage={t("empty")}
         />
         <div className="mt-4 rounded-lg border p-3">
+          {viewMode === "week" ? (
+            <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-7">
+              {Array.from({ length: 7 }, (_, index) => {
+                const day = addDaysISO(rangeStartDay, index);
+                const dayBookings = bookings
+                  .filter((booking) => booking.starts_at.toISOString().slice(0, 10) === day)
+                  .sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime());
+
+                return (
+                  <div key={day} className="rounded-md border p-2">
+                    <p className="mb-1 text-xs font-medium">{day}</p>
+                    {dayBookings.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">{t("weekEmptyDay")}</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {dayBookings.map((booking) => (
+                          <button
+                            key={booking.id}
+                            type="button"
+                            className="w-full rounded border px-2 py-1 text-left text-xs hover:bg-accent"
+                            onClick={() => setSelectedBookingId(booking.id)}
+                          >
+                            {booking.starts_at.toISOString().slice(11, 16)} · {booking.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">{t("historyTitle")}</p>
             {selectedBookingId != null ? (

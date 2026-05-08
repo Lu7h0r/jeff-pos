@@ -263,6 +263,7 @@ export function TableActionButton({ variant = "default", onClick, icon, label }:
     <Button
       size="icon"
       variant="ghost"
+      title={label}
       className={variant === "danger" ? "text-destructive hover:text-destructive" : undefined}
       onClick={(e) => {
         e.stopPropagation();

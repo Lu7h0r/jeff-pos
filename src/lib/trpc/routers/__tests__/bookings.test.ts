@@ -24,6 +24,7 @@ let locationAId = 0;
 let locationBId = 0;
 let customerId = 0;
 let staffId = 0;
+let staffAltId = 0;
 
 beforeAll(async () => {
   await pg.exec(SCHEMA_DDL);
@@ -70,15 +71,23 @@ beforeAll(async () => {
     .returning();
   customerId = customer.id;
 
-  const [staff] = await db
+  const [staff, staffAlt] = await db
     .insert(schema.staffMembers)
-    .values({
-      business_id: bizId,
-      display_name: "Artista Agenda",
-      default_split: "staff_30_house_70",
-    })
+    .values([
+      {
+        business_id: bizId,
+        display_name: "Artista Agenda",
+        default_split: "staff_30_house_70",
+      },
+      {
+        business_id: bizId,
+        display_name: "Artista Alterno",
+        default_split: "staff_30_house_70",
+      },
+    ])
     .returning();
   staffId = staff.id;
+  staffAltId = staffAlt.id;
 });
 
 afterAll(async () => {
@@ -132,6 +141,7 @@ describe("bookings router", () => {
     const created = await caller.create({
       locationId: locationAId,
       serviceKind: "piercing",
+      staffId,
       title: "Piercing lóbulo",
       startsAt: new Date("2026-05-11T13:00:00.000Z"),
       endsAt: new Date("2026-05-11T13:30:00.000Z"),
@@ -160,6 +170,7 @@ describe("bookings router", () => {
     const created = await caller.create({
       locationId: locationAId,
       serviceKind: "tattoo",
+      staffId,
       title: "Sesion para reprogramar",
       startsAt: new Date("2026-05-13T09:00:00.000Z"),
       endsAt: new Date("2026-05-13T10:00:00.000Z"),
@@ -197,6 +208,7 @@ describe("bookings router", () => {
     const created = await caller.create({
       locationId: locationAId,
       serviceKind: "tattoo",
+      staffId,
       title: "Bloqueo completado sin acuerdo",
       startsAt: new Date("2026-05-11T15:00:00.000Z"),
       endsAt: new Date("2026-05-11T16:00:00.000Z"),
@@ -214,6 +226,7 @@ describe("bookings router", () => {
     const created = await caller.create({
       locationId: locationBId,
       customerId,
+      staffId,
       serviceKind: "other",
       title: "Servicio personalizado",
       startsAt: new Date("2026-05-12T09:00:00.000Z"),
@@ -241,6 +254,7 @@ describe("bookings router", () => {
     const created = await caller.create({
       locationId: locationAId,
       serviceKind: "tattoo",
+      staffId,
       title: "Respuesta externa",
       startsAt: new Date("2026-05-13T10:00:00.000Z"),
       endsAt: new Date("2026-05-13T11:00:00.000Z"),
@@ -270,6 +284,7 @@ describe("bookings router", () => {
     const confirmedBooking = await caller.create({
       locationId: locationAId,
       customerId,
+      staffId,
       serviceKind: "tattoo",
       title: "KPI confirmado",
       startsAt: new Date("2026-05-14T09:00:00.000Z"),
@@ -284,6 +299,7 @@ describe("bookings router", () => {
     const noShowBooking = await caller.create({
       locationId: locationAId,
       serviceKind: "other",
+      staffId,
       title: "KPI no show",
       startsAt: new Date("2026-05-14T11:00:00.000Z"),
       endsAt: new Date("2026-05-14T12:00:00.000Z"),
@@ -293,6 +309,7 @@ describe("bookings router", () => {
     const pendingBooking = await caller.create({
       locationId: locationAId,
       serviceKind: "piercing",
+      staffId: staffAltId,
       title: "KPI pendiente",
       startsAt: new Date("2026-05-14T14:00:00.000Z"),
       endsAt: new Date("2026-05-14T14:30:00.000Z"),
@@ -309,5 +326,78 @@ describe("bookings router", () => {
     expect(summary.confirmedRate).toBeCloseTo(1 / 3);
     expect(summary.noShowRate).toBeCloseTo(1 / 3);
     expect(summary.conversionToServiceAgreementRate).toBeCloseTo(1 / 3);
+
+    const summaryByStaff = await caller.summary({
+      startsAt: new Date("2026-05-14T00:00:00.000Z"),
+      endsAt: new Date("2026-05-14T23:59:59.999Z"),
+      locationId: locationAId,
+      staffId,
+    });
+    expect(summaryByStaff.totalBookings).toBe(2);
+  });
+
+  it("requires staff and blocks overlapping bookings for same staff+location", async () => {
+    const caller = callerAs("u-bookings", bizId, locationAId);
+
+    await expect(
+      caller.create({
+        locationId: locationAId,
+        serviceKind: "tattoo",
+        title: "Sin artista",
+        startsAt: new Date("2026-05-15T09:00:00.000Z"),
+        endsAt: new Date("2026-05-15T10:00:00.000Z"),
+      } as unknown as Parameters<typeof caller.create>[0]),
+    ).rejects.toBeDefined();
+
+    await caller.create({
+      locationId: locationAId,
+      staffId,
+      serviceKind: "tattoo",
+      title: "Base solape",
+      startsAt: new Date("2026-05-15T10:00:00.000Z"),
+      endsAt: new Date("2026-05-15T11:00:00.000Z"),
+    });
+
+    await expect(
+      caller.create({
+        locationId: locationAId,
+        staffId,
+        serviceKind: "piercing",
+        title: "Cruza horario",
+        startsAt: new Date("2026-05-15T10:30:00.000Z"),
+        endsAt: new Date("2026-05-15T11:30:00.000Z"),
+      }),
+    ).rejects.toMatchObject<Partial<TRPCError>>({ code: "CONFLICT" });
+  });
+
+  it("blocks overlap on reschedule", async () => {
+    const caller = callerAs("u-bookings", bizId, locationAId);
+
+    const bookingA = await caller.create({
+      locationId: locationAId,
+      staffId,
+      serviceKind: "tattoo",
+      title: "A",
+      startsAt: new Date("2026-05-16T09:00:00.000Z"),
+      endsAt: new Date("2026-05-16T10:00:00.000Z"),
+    });
+    const bookingB = await caller.create({
+      locationId: locationAId,
+      staffId,
+      serviceKind: "tattoo",
+      title: "B",
+      startsAt: new Date("2026-05-16T10:30:00.000Z"),
+      endsAt: new Date("2026-05-16T11:30:00.000Z"),
+    });
+
+    await expect(
+      caller.reschedule({
+        bookingId: bookingB.id,
+        startsAt: new Date("2026-05-16T09:30:00.000Z"),
+        endsAt: new Date("2026-05-16T10:30:00.000Z"),
+      }),
+    ).rejects.toMatchObject<Partial<TRPCError>>({ code: "CONFLICT" });
+
+    expect(bookingA.id).toBeGreaterThan(0);
   });
 });

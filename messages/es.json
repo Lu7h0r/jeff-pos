@@ -183,6 +183,13 @@
     "quickTitle": "Título",
     "quickTitlePlaceholder": "Ej. Tatuaje floral",
     "quickKind": "Tipo de servicio",
+    "staffRequired": "Artista",
+    "selectStaff": "Selecciona un artista",
+    "staffFilter": "Filtrar por artista",
+    "allStaff": "Todos los artistas",
+    "viewLabel": "Vista",
+    "viewDay": "Día",
+    "viewWeek": "Semana",
     "quickStart": "Hora inicio",
     "quickEnd": "Hora fin",
     "quickCreate": "Crear agendamiento",
@@ -211,6 +218,7 @@
     "colTitle": "Título",
     "colKind": "Tipo",
     "colSchedule": "Horario",
+    "colStaff": "Artista",
     "colConfirmation": "Confirmación",
     "actionConfirm": "Confirmar",
     "actionHistory": "Historial",
@@ -235,7 +243,8 @@
     "eventConvert": "Convertido a servicio",
     "promptStart": "Nueva hora de inicio (HH:mm)",
     "promptEnd": "Nueva hora de fin (HH:mm)",
-    "empty": "No hay agendamientos para este día."
+    "empty": "No hay agendamientos para este rango.",
+    "weekEmptyDay": "Sin agendamientos"
   },
   "pos": {
     "unavailableTitle": "Sanctum Desk no disponible",

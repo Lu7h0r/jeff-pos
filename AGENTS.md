@@ -40,6 +40,15 @@ bun test --coverage              # con coverage
 - **Auth cookie prefix:** `sanctum` (no el default de Better Auth)
 - **UI/copy:** español neutro, no rioplatense
 
+## Módulo Agendamientos (obligatorio)
+
+- **Multi-nicho + multi-sede:** agendamientos funcionan para tattoo/piercing/otros y siempre en contexto `business_id` + `location_id`.
+- **Create booking:** requiere `staffId` válido del business activo; respetar scope por sede cuando el usuario esté location-scoped.
+- **No solape:** bloquear cruces de horario por `staff_id + location_id` en create/reschedule.
+- **Completed:** mantener regla `service_agreement_id` obligatorio antes de pasar a `completed`.
+- **Summary:** siempre filtrar por rango y opcionalmente por `locationId`/`staffId`.
+- **n8n booking events:** publicar en outbox `booking_created|booking_confirmed|booking_rescheduled|booking_cancelled` con `idempotency_key` estable (`<event_type>:booking:<booking_id>`).
+
 ## Antes de Commitear
 
 ```bash
