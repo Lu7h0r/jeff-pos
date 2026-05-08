@@ -52,6 +52,7 @@ const TABLES: PgTable[] = [
   // commission_estimates after service_sales + staff_members.
   schema.staffMembers,
   schema.bookings,
+  schema.bookingEvents,
   schema.serviceAgreementSessions,
   schema.serviceAgreementCommissions,
   schema.serviceAgreementConsumptionTemplates,

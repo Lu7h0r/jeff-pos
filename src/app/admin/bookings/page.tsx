@@ -43,6 +43,7 @@ export default function BookingsPage() {
   const [startsAt, setStartsAt] = useState("10:00");
   const [endsAt, setEndsAt] = useState("11:00");
   const [locationId, setLocationId] = useState<number | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
 
   const startsAtDate = useMemo(
     () => new Date(`${selectedDay}T${startsAt}:00`),
@@ -55,6 +56,14 @@ export default function BookingsPage() {
 
   const listQuery = useQuery(
     trpc.bookings.list.queryOptions({
+      startsAt: new Date(startOfDayISO(selectedDay)),
+      endsAt: new Date(endOfDayISO(selectedDay)),
+      locationId: locationId ?? undefined,
+    }),
+  );
+
+  const summaryQuery = useQuery(
+    trpc.bookings.summary.queryOptions({
       startsAt: new Date(startOfDayISO(selectedDay)),
       endsAt: new Date(endOfDayISO(selectedDay)),
       locationId: locationId ?? undefined,
@@ -106,6 +115,11 @@ export default function BookingsPage() {
   });
 
   const bookings = listQuery.data ?? [];
+  const historyQuery = useQuery({
+    ...trpc.bookings.listEvents.queryOptions({ bookingId: selectedBookingId ?? 1 }),
+    enabled: selectedBookingId != null,
+  });
+  const bookingHistory = historyQuery.data ?? [];
 
   const statusLabel: Record<Booking["status"], string> = {
     pending: t("statusPending"),
@@ -115,11 +129,30 @@ export default function BookingsPage() {
     cancelled: t("statusCancelled"),
     no_show: t("statusNoShow"),
   };
+  const confirmationLabel: Record<
+    Booking["confirmation_status"],
+    string
+  > = {
+    pending: t("confirmationPending"),
+    confirmed: t("confirmationConfirmed"),
+    unconfirmed: t("confirmationUnconfirmed"),
+  };
 
   const kindLabel: Record<Booking["service_kind"], string> = {
     tattoo: t("kindTattoo"),
     piercing: t("kindPiercing"),
     other: t("kindOther"),
+  };
+
+  const eventLabel: Record<string, string> = {
+    create: t("eventCreate"),
+    confirm: t("eventConfirm"),
+    reschedule: t("eventReschedule"),
+    cancel: t("eventCancel"),
+    check_in: t("eventCheckIn"),
+    no_show: t("eventNoShow"),
+    completed: t("eventCompleted"),
+    convert_to_service: t("eventConvert"),
   };
 
   const columns: Column<Booking>[] = [
@@ -140,15 +173,30 @@ export default function BookingsPage() {
       render: (row) => statusLabel[row.status],
     },
     {
+      key: "confirmation_status",
+      header: t("colConfirmation"),
+      render: (row) => confirmationLabel[row.confirmation_status],
+    },
+    {
       key: "actions",
       header: tCommon("actions"),
       render: (row) => (
         <TableActions>
           <TableActionButton
+            onClick={() => setSelectedBookingId(row.id)}
+            label={t("actionHistory")}
+          />
+          <TableActionButton
             onClick={() =>
               statusMutation.mutate({ bookingId: row.id, status: "confirmed" })
             }
             label={t("actionConfirm")}
+          />
+          <TableActionButton
+            onClick={() =>
+              statusMutation.mutate({ bookingId: row.id, status: "completed" })
+            }
+            label={t("actionComplete")}
           />
           <TableActionButton
             onClick={() => {
@@ -180,6 +228,45 @@ export default function BookingsPage() {
   return (
     <Card className="flex flex-col gap-4 p-3 sm:gap-6 sm:p-6">
       <CardHeader className="p-0 space-y-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("kpiTotal")}</p>
+              <p className="text-2xl font-semibold">
+                {summaryQuery.data?.totalBookings ?? 0}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("kpiConfirmedRate")}</p>
+              <p className="text-2xl font-semibold">
+                {Math.round((summaryQuery.data?.confirmedRate ?? 0) * 100)}%
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("kpiNoShowRate")}</p>
+              <p className="text-2xl font-semibold">
+                {Math.round((summaryQuery.data?.noShowRate ?? 0) * 100)}%
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{t("kpiConversionRate")}</p>
+              <p className="text-2xl font-semibold">
+                {Math.round(
+                  (summaryQuery.data?.conversionToServiceAgreementRate ?? 0) *
+                    100,
+                )}
+                %
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-2">
             <Label htmlFor="booking-day">{t("day")}</Label>
@@ -271,6 +358,31 @@ export default function BookingsPage() {
           columns={columns}
           emptyMessage={t("empty")}
         />
+        <div className="mt-4 rounded-lg border p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-medium">{t("historyTitle")}</p>
+            {selectedBookingId != null ? (
+              <p className="text-xs text-muted-foreground">
+                #{selectedBookingId}
+              </p>
+            ) : null}
+          </div>
+          {selectedBookingId == null ? (
+            <p className="text-sm text-muted-foreground">{t("historySelectHint")}</p>
+          ) : historyQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">{t("historyLoading")}</p>
+          ) : bookingHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("historyEmpty")}</p>
+          ) : (
+            <div className="space-y-1">
+              {bookingHistory.slice(0, 6).map((event) => (
+                <p key={event.id} className="text-sm">
+                  {eventLabel[event.event_type] ?? event.event_type} - {formatDate(event.created_at ?? new Date())}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

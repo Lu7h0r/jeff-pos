@@ -265,6 +265,9 @@ export const bookings = pgTable(
     starts_at: timestamp("starts_at").notNull(),
     ends_at: timestamp("ends_at").notNull(),
     status: varchar("status", { length: 20 }).notNull().default("pending"),
+    confirmation_status: varchar("confirmation_status", { length: 20 })
+      .notNull()
+      .default("pending"),
     service_agreement_id: integer("service_agreement_id").references(
       () => serviceAgreements.id,
     ),
@@ -275,6 +278,28 @@ export const bookings = pgTable(
     index("bookings_location_idx").on(table.location_id),
     index("bookings_starts_at_idx").on(table.starts_at),
     index("bookings_staff_idx").on(table.staff_id),
+  ],
+);
+
+export const bookingEvents = pgTable(
+  "booking_events",
+  {
+    id: serial("id").primaryKey(),
+    booking_id: integer("booking_id")
+      .notNull()
+      .references(() => bookings.id),
+    business_id: integer("business_id")
+      .notNull()
+      .references(() => businesses.id),
+    event_type: varchar("event_type", { length: 50 }).notNull(),
+    payload_json: text("payload_json").notNull(),
+    actor_user_id: text("actor_user_id").references(() => user.id),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("booking_events_booking_idx").on(table.booking_id),
+    index("booking_events_business_idx").on(table.business_id),
+    index("booking_events_created_at_idx").on(table.created_at),
   ],
 );
 
@@ -443,7 +468,9 @@ export const followUpOutboxEvents = pgTable("follow_up_outbox_events", {
   service_agreement_session_id: integer("service_agreement_session_id").references(
     () => serviceAgreementSessions.id,
   ),
+  booking_id: integer("booking_id").references(() => bookings.id),
   event_type: varchar("event_type", { length: 50 }).notNull(),
+  idempotency_key: varchar("idempotency_key", { length: 191 }),
   payload_json: text("payload_json").notNull(),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
@@ -455,7 +482,9 @@ export const followUpOutboxEvents = pgTable("follow_up_outbox_events", {
     .references(() => user.id),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("follow_up_outbox_events_idempotency_uidx").on(table.idempotency_key),
+]);
 
 // ── Relations ───────────────────────────────────────────────────────────────
 export const ordersRelations = relations(orders, ({ one, many }) => ({
@@ -707,6 +736,10 @@ export const followUpOutboxEventsRelations = relations(
     session: one(serviceAgreementSessions, {
       fields: [followUpOutboxEvents.service_agreement_session_id],
       references: [serviceAgreementSessions.id],
+    }),
+    booking: one(bookings, {
+      fields: [followUpOutboxEvents.booking_id],
+      references: [bookings.id],
     }),
     createdBy: one(user, {
       fields: [followUpOutboxEvents.created_by_user_id],
