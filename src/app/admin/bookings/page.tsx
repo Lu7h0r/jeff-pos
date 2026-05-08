@@ -1,0 +1,277 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarPlusIcon } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  DataTable,
+  TableActionButton,
+  TableActions,
+  type Column,
+} from "@/components/ui/data-table";
+import { useTRPC } from "@/lib/trpc/client";
+import { useCrudMutation } from "@/hooks/use-crud-mutation";
+import { formatDate } from "@/lib/utils";
+import type { RouterOutputs } from "@/lib/trpc/router";
+
+type Booking = RouterOutputs["bookings"]["list"][number];
+
+function startOfDayISO(value: string): string {
+  return `${value}T00:00:00.000Z`;
+}
+
+function endOfDayISO(value: string): string {
+  return `${value}T23:59:59.999Z`;
+}
+
+export default function BookingsPage() {
+  const t = useTranslations("bookings");
+  const tCommon = useTranslations("common");
+  const trpc = useTRPC();
+  const locationsQuery = useQuery(trpc.locations.list.queryOptions());
+  const locations = locationsQuery.data ?? [];
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [selectedDay, setSelectedDay] = useState(today);
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<"tattoo" | "piercing" | "other">("tattoo");
+  const [startsAt, setStartsAt] = useState("10:00");
+  const [endsAt, setEndsAt] = useState("11:00");
+  const [locationId, setLocationId] = useState<number | null>(null);
+
+  const startsAtDate = useMemo(
+    () => new Date(`${selectedDay}T${startsAt}:00`),
+    [selectedDay, startsAt],
+  );
+  const endsAtDate = useMemo(
+    () => new Date(`${selectedDay}T${endsAt}:00`),
+    [selectedDay, endsAt],
+  );
+
+  const listQuery = useQuery(
+    trpc.bookings.list.queryOptions({
+      startsAt: new Date(startOfDayISO(selectedDay)),
+      endsAt: new Date(endOfDayISO(selectedDay)),
+      locationId: locationId ?? undefined,
+    }),
+  );
+
+  const invalidateKeys = trpc.bookings.list.queryOptions({
+    startsAt: new Date(startOfDayISO(selectedDay)),
+    endsAt: new Date(endOfDayISO(selectedDay)),
+    locationId: locationId ?? undefined,
+  }).queryKey;
+
+  const createMutation = useCrudMutation({
+    mutationOptions: trpc.bookings.create.mutationOptions(),
+    invalidateKeys,
+    successMessage: t("created"),
+    errorMessage: t("createFailed"),
+    onSuccess: () => {
+      setTitle("");
+    },
+  });
+
+  const statusMutation = useCrudMutation({
+    mutationOptions: trpc.bookings.updateStatus.mutationOptions(),
+    invalidateKeys,
+    successMessage: t("updated"),
+    errorMessage: t("updateFailed"),
+  });
+
+  const cancelMutation = useCrudMutation({
+    mutationOptions: trpc.bookings.cancel.mutationOptions(),
+    invalidateKeys,
+    successMessage: t("cancelled"),
+    errorMessage: t("cancelFailed"),
+  });
+
+  const rescheduleMutation = useCrudMutation({
+    mutationOptions: trpc.bookings.reschedule.mutationOptions(),
+    invalidateKeys,
+    successMessage: t("rescheduled"),
+    errorMessage: t("rescheduleFailed"),
+  });
+
+  const convertMutation = useCrudMutation({
+    mutationOptions: trpc.bookings.convertToServiceAgreement.mutationOptions(),
+    invalidateKeys,
+    successMessage: t("converted"),
+    errorMessage: t("convertFailed"),
+  });
+
+  const bookings = listQuery.data ?? [];
+
+  const statusLabel: Record<Booking["status"], string> = {
+    pending: t("statusPending"),
+    confirmed: t("statusConfirmed"),
+    checked_in: t("statusCheckedIn"),
+    completed: t("statusCompleted"),
+    cancelled: t("statusCancelled"),
+    no_show: t("statusNoShow"),
+  };
+
+  const kindLabel: Record<Booking["service_kind"], string> = {
+    tattoo: t("kindTattoo"),
+    piercing: t("kindPiercing"),
+    other: t("kindOther"),
+  };
+
+  const columns: Column<Booking>[] = [
+    { key: "title", header: t("colTitle"), className: "font-medium" },
+    {
+      key: "service_kind",
+      header: t("colKind"),
+      render: (row) => kindLabel[row.service_kind],
+    },
+    {
+      key: "starts_at",
+      header: t("colSchedule"),
+      render: (row) => `${formatDate(row.starts_at)} - ${formatDate(row.ends_at)}`,
+    },
+    {
+      key: "status",
+      header: tCommon("status"),
+      render: (row) => statusLabel[row.status],
+    },
+    {
+      key: "actions",
+      header: tCommon("actions"),
+      render: (row) => (
+        <TableActions>
+          <TableActionButton
+            onClick={() =>
+              statusMutation.mutate({ bookingId: row.id, status: "confirmed" })
+            }
+            label={t("actionConfirm")}
+          />
+          <TableActionButton
+            onClick={() => {
+              const nextStart = typeof window !== "undefined" ? window.prompt(t("promptStart"), startsAt) : null;
+              const nextEnd = typeof window !== "undefined" ? window.prompt(t("promptEnd"), endsAt) : null;
+              if (!nextStart || !nextEnd) return;
+              rescheduleMutation.mutate({
+                bookingId: row.id,
+                startsAt: new Date(`${selectedDay}T${nextStart}:00`),
+                endsAt: new Date(`${selectedDay}T${nextEnd}:00`),
+              });
+            }}
+            label={t("actionReschedule")}
+          />
+          <TableActionButton
+            variant="danger"
+            onClick={() => cancelMutation.mutate({ bookingId: row.id })}
+            label={tCommon("cancel")}
+          />
+          <TableActionButton
+            onClick={() => convertMutation.mutate({ bookingId: row.id })}
+            label={t("actionConvert")}
+          />
+        </TableActions>
+      ),
+    },
+  ];
+
+  return (
+    <Card className="flex flex-col gap-4 p-3 sm:gap-6 sm:p-6">
+      <CardHeader className="p-0 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="booking-day">{t("day")}</Label>
+            <Input
+              id="booking-day"
+              type="date"
+              value={selectedDay}
+              onChange={(event) => setSelectedDay(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="booking-location">{tCommon("location")}</Label>
+            <select
+              id="booking-location"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={locationId ?? ""}
+              onChange={(event) =>
+                setLocationId(event.target.value ? Number(event.target.value) : null)
+              }
+            >
+              <option value="">{t("allLocations")}</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="booking-title">{t("quickTitle")}</Label>
+            <Input
+              id="booking-title"
+              placeholder={t("quickTitlePlaceholder")}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="booking-kind">{t("quickKind")}</Label>
+            <select
+              id="booking-kind"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={kind}
+              onChange={(event) => setKind(event.target.value as "tattoo" | "piercing" | "other")}
+            >
+              <option value="tattoo">{t("kindTattoo")}</option>
+              <option value="piercing">{t("kindPiercing")}</option>
+              <option value="other">{t("kindOther")}</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="booking-start">{t("quickStart")}</Label>
+            <Input id="booking-start" type="time" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="booking-end">{t("quickEnd")}</Label>
+            <Input id="booking-end" type="time" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} />
+          </div>
+        </div>
+
+        <div>
+          <Button
+            onClick={() =>
+              createMutation.mutate({
+                locationId: locationId ?? locations[0]?.id ?? 0,
+                serviceKind: kind,
+                title,
+                startsAt: startsAtDate,
+                endsAt: endsAtDate,
+              })
+            }
+            disabled={
+              title.trim().length === 0 ||
+              createMutation.isPending ||
+              (locationId == null && locations.length === 0)
+            }
+          >
+            <CalendarPlusIcon className="w-4 h-4 mr-2" />
+            {t("quickCreate")}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <DataTable
+          data={bookings}
+          columns={columns}
+          emptyMessage={t("empty")}
+        />
+      </CardContent>
+    </Card>
+  );
+}

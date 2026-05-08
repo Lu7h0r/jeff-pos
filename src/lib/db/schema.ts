@@ -246,6 +246,38 @@ export const serviceAgreements = pgTable("service_agreements", {
   updated_at: timestamp("updated_at").defaultNow(),
 });
 
+// ── Bookings (Agendamientos - Fase 1) ───────────────────────────────────────
+export const bookings = pgTable(
+  "bookings",
+  {
+    id: serial("id").primaryKey(),
+    business_id: integer("business_id")
+      .notNull()
+      .references(() => businesses.id),
+    location_id: integer("location_id")
+      .notNull()
+      .references(() => locations.id),
+    customer_id: integer("customer_id").references(() => customers.id),
+    staff_id: integer("staff_id").references(() => staffMembers.id),
+    service_kind: varchar("service_kind", { length: 20 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    notes: text("notes"),
+    starts_at: timestamp("starts_at").notNull(),
+    ends_at: timestamp("ends_at").notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    service_agreement_id: integer("service_agreement_id").references(
+      () => serviceAgreements.id,
+    ),
+    created_at: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("bookings_business_idx").on(table.business_id),
+    index("bookings_location_idx").on(table.location_id),
+    index("bookings_starts_at_idx").on(table.starts_at),
+    index("bookings_staff_idx").on(table.staff_id),
+  ],
+);
+
 export const serviceAgreementSessions = pgTable("service_agreement_sessions", {
   id: serial("id").primaryKey(),
   service_agreement_id: integer("service_agreement_id")

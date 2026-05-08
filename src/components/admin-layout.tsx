@@ -38,6 +38,7 @@ import {
   UserIcon,
   MonitorIcon,
   ClockIcon,
+  CalendarDaysIcon,
   MenuIcon,
   XIcon,
   UsersRoundIcon,
@@ -67,6 +68,7 @@ const navItems: NavItem[] = [
   { href: "/admin/staff", labelKey: "staff", icon: UserIcon },
   { href: "/admin/workstations", labelKey: "workstations", icon: MonitorIcon },
   { href: "/admin/station-rentals", labelKey: "stationRentals", icon: ClockIcon },
+  { href: "/admin/bookings", labelKey: "bookings", icon: CalendarDaysIcon },
   { href: "/admin/pos", labelKey: "pos", icon: ShoppingCartIcon },
   { href: "/admin/team", labelKey: "team", icon: UsersRoundIcon },
 ];
