@@ -601,21 +601,10 @@ export const bookingsRouter = router({
       const existing = await loadBookingOwned(input.bookingId, businessId);
       assertLocationAllowed(ctx, existing.location_id);
 
-      if (input.response === "reschedule" && existing.staff_id != null) {
-        await assertBookingNoOverlap({
-          businessId,
-          locationId: existing.location_id,
-          staffId: existing.staff_id,
-          startsAt: input.startsAt!,
-          endsAt: input.endsAt!,
-          excludeBookingId: existing.id,
-        });
-      }
-
       const updated = await db.transaction(async (tx) => {
         const [next] = await tx
           .update(bookings)
-        .set({ status: "cancelled" })
+          .set({ status: "cancelled" })
           .where(eq(bookings.id, input.bookingId))
           .returning();
 
