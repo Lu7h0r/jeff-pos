@@ -18,6 +18,12 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ArrowUpDown, ArrowUp, ArrowDown, DownloadIcon, TrashIcon, FilePenIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -245,9 +251,11 @@ export function DataTable<T>({
 
 export function TableActions({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-      {children}
-    </div>
+    <TooltipProvider>
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -260,18 +268,22 @@ interface TableActionButtonProps {
 
 export function TableActionButton({ variant = "default", onClick, icon, label }: TableActionButtonProps) {
   return (
-    <Button
-      size="icon"
-      variant="ghost"
-      title={label}
-      className={variant === "danger" ? "text-destructive hover:text-destructive" : undefined}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-    >
-      {icon}
-      <span className="sr-only">{label}</span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          className={variant === "danger" ? "text-destructive hover:text-destructive" : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+        >
+          {icon}
+          <span className="sr-only">{label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }

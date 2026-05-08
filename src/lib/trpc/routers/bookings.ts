@@ -8,6 +8,7 @@ import {
   businessMembers,
   customers,
   followUpOutboxEvents,
+  locationMembers,
   locations,
   serviceAgreements,
   staffMembers,
@@ -219,6 +220,61 @@ async function assertBookingNoOverlap(
   }
 }
 
+async function assertStaffAssignableToLocation(input: {
+  businessId: number;
+  locationId: number;
+  staffId: number;
+}) {
+  const [staff] = await db
+    .select({ id: staffMembers.id, userId: staffMembers.user_id })
+    .from(staffMembers)
+    .where(
+      and(
+        eq(staffMembers.id, input.staffId),
+        eq(staffMembers.business_id, input.businessId),
+        eq(staffMembers.archived, false),
+      ),
+    )
+    .limit(1);
+
+  if (!staff) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Staff member belongs to a different business",
+    });
+  }
+
+  if (staff.userId == null) {
+    return;
+  }
+
+  const memberships = await db
+    .select({ locationId: locationMembers.location_id, status: locationMembers.status })
+    .from(locationMembers)
+    .where(
+      and(
+        eq(locationMembers.business_id, input.businessId),
+        eq(locationMembers.user_id, staff.userId),
+      ),
+    );
+
+  if (memberships.length === 0) {
+    return;
+  }
+
+  const hasEnabledMembership = memberships.some(
+    (membership) =>
+      membership.locationId === input.locationId && membership.status === "active",
+  );
+
+  if (!hasEnabledMembership) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Staff member is not enabled for this location",
+    });
+  }
+}
+
 export const bookingsRouter = router({
   list: protectedProcedure
     .input(
@@ -334,23 +390,11 @@ export const bookingsRouter = router({
         }
       }
 
-      const [staff] = await db
-        .select({ id: staffMembers.id })
-        .from(staffMembers)
-        .where(
-          and(
-            eq(staffMembers.id, input.staffId),
-            eq(staffMembers.business_id, businessId),
-            eq(staffMembers.archived, false),
-          ),
-        )
-        .limit(1);
-      if (!staff) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Staff member belongs to a different business",
-        });
-      }
+      await assertStaffAssignableToLocation({
+        businessId,
+        locationId: input.locationId,
+        staffId: input.staffId,
+      });
 
       await assertBookingNoOverlap({
         businessId,
@@ -557,6 +601,17 @@ export const bookingsRouter = router({
       const existing = await loadBookingOwned(input.bookingId, businessId);
       assertLocationAllowed(ctx, existing.location_id);
 
+      if (input.response === "reschedule" && existing.staff_id != null) {
+        await assertBookingNoOverlap({
+          businessId,
+          locationId: existing.location_id,
+          staffId: existing.staff_id,
+          startsAt: input.startsAt!,
+          endsAt: input.endsAt!,
+          excludeBookingId: existing.id,
+        });
+      }
+
       const updated = await db.transaction(async (tx) => {
         const [next] = await tx
           .update(bookings)
@@ -713,7 +768,7 @@ export const bookingsRouter = router({
         if (input.response === "reschedule") {
           const [next] = await tx
             .update(bookings)
-        .set({
+            .set({
               starts_at: input.startsAt!,
               ends_at: input.endsAt!,
               status: "pending",

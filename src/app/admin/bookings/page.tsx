@@ -29,26 +29,42 @@ import type { RouterOutputs } from "@/lib/trpc/router";
 
 type Booking = RouterOutputs["bookings"]["list"][number];
 
-function startOfDayISO(value: string): string {
-  return `${value}T00:00:00.000Z`;
+function parseLocalDate(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function endOfDayISO(value: string): string {
-  return `${value}T23:59:59.999Z`;
+function formatLocalDateKey(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function startOfWeekISO(value: string): string {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  const day = date.getUTCDay();
+  const date = parseLocalDate(value);
+  const day = date.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
-  date.setUTCDate(date.getUTCDate() + diffToMonday);
-  return date.toISOString().slice(0, 10);
+  date.setDate(date.getDate() + diffToMonday);
+  return formatLocalDateKey(date);
 }
 
 function addDaysISO(value: string, days: number): string {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+  const date = parseLocalDate(value);
+  date.setDate(date.getDate() + days);
+  return formatLocalDateKey(date);
+}
+
+function startOfDay(value: string): Date {
+  const date = parseLocalDate(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function endOfDay(value: string): Date {
+  const date = parseLocalDate(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
 }
 
 export default function BookingsPage() {
@@ -86,8 +102,8 @@ export default function BookingsPage() {
 
   const listQuery = useQuery(
     trpc.bookings.list.queryOptions({
-      startsAt: new Date(startOfDayISO(rangeStartDay)),
-      endsAt: new Date(endOfDayISO(rangeEndDay)),
+      startsAt: startOfDay(rangeStartDay),
+      endsAt: endOfDay(rangeEndDay),
       locationId: locationId ?? undefined,
       staffId: filterStaffId ?? undefined,
     }),
@@ -95,16 +111,16 @@ export default function BookingsPage() {
 
   const summaryQuery = useQuery(
     trpc.bookings.summary.queryOptions({
-      startsAt: new Date(startOfDayISO(rangeStartDay)),
-      endsAt: new Date(endOfDayISO(rangeEndDay)),
+      startsAt: startOfDay(rangeStartDay),
+      endsAt: endOfDay(rangeEndDay),
       locationId: locationId ?? undefined,
       staffId: filterStaffId ?? undefined,
     }),
   );
 
   const invalidateKeys = trpc.bookings.list.queryOptions({
-    startsAt: new Date(startOfDayISO(rangeStartDay)),
-    endsAt: new Date(endOfDayISO(rangeEndDay)),
+    startsAt: startOfDay(rangeStartDay),
+    endsAt: endOfDay(rangeEndDay),
     locationId: locationId ?? undefined,
     staffId: filterStaffId ?? undefined,
   }).queryKey;
@@ -464,7 +480,7 @@ export default function BookingsPage() {
               {Array.from({ length: 7 }, (_, index) => {
                 const day = addDaysISO(rangeStartDay, index);
                 const dayBookings = bookings
-                  .filter((booking) => booking.starts_at.toISOString().slice(0, 10) === day)
+                  .filter((booking) => formatLocalDateKey(booking.starts_at) === day)
                   .sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime());
 
                 return (

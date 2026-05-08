@@ -25,6 +25,7 @@ let locationBId = 0;
 let customerId = 0;
 let staffId = 0;
 let staffAltId = 0;
+let outsideBusinessStaffId = 0;
 
 beforeAll(async () => {
   await pg.exec(SCHEMA_DDL);
@@ -88,6 +89,20 @@ beforeAll(async () => {
     .returning();
   staffId = staff.id;
   staffAltId = staffAlt.id;
+
+  const [outsideBusiness] = await db
+    .insert(schema.businesses)
+    .values({ name: "Otro Studio", slug: "otro-studio" })
+    .returning();
+  const [outsideStaff] = await db
+    .insert(schema.staffMembers)
+    .values({
+      business_id: outsideBusiness.id,
+      display_name: "Artista Externo",
+      default_split: "staff_30_house_70",
+    })
+    .returning();
+  outsideBusinessStaffId = outsideStaff.id;
 });
 
 afterAll(async () => {
@@ -346,7 +361,7 @@ describe("bookings router", () => {
         title: "Sin artista",
         startsAt: new Date("2026-05-15T09:00:00.000Z"),
         endsAt: new Date("2026-05-15T10:00:00.000Z"),
-      } as unknown as Parameters<typeof caller.create>[0]),
+      }),
     ).rejects.toBeDefined();
 
     await caller.create({
@@ -368,6 +383,21 @@ describe("bookings router", () => {
         endsAt: new Date("2026-05-15T11:30:00.000Z"),
       }),
     ).rejects.toMatchObject<Partial<TRPCError>>({ code: "CONFLICT" });
+  });
+
+  it("rejects create when staff is outside active business", async () => {
+    const caller = callerAs("u-bookings", bizId, locationAId);
+
+    await expect(
+      caller.create({
+        locationId: locationAId,
+        staffId: outsideBusinessStaffId,
+        serviceKind: "tattoo",
+        title: "Staff fuera del negocio",
+        startsAt: new Date("2026-05-15T13:00:00.000Z"),
+        endsAt: new Date("2026-05-15T14:00:00.000Z"),
+      }),
+    ).rejects.toMatchObject<Partial<TRPCError>>({ code: "FORBIDDEN" });
   });
 
   it("blocks overlap on reschedule", async () => {
@@ -399,5 +429,57 @@ describe("bookings router", () => {
     ).rejects.toMatchObject<Partial<TRPCError>>({ code: "CONFLICT" });
 
     expect(bookingA.id).toBeGreaterThan(0);
+  });
+
+  it("applies summary filters by date range, location and staff", async () => {
+    const caller = callerAs("u-bookings", bizId, locationAId);
+
+    await caller.create({
+      locationId: locationAId,
+      staffId,
+      serviceKind: "tattoo",
+      title: "Summary locA staffA",
+      startsAt: new Date("2026-05-20T09:00:00.000Z"),
+      endsAt: new Date("2026-05-20T10:00:00.000Z"),
+    });
+    await caller.create({
+      locationId: locationAId,
+      staffId: staffAltId,
+      serviceKind: "tattoo",
+      title: "Summary locA staffB",
+      startsAt: new Date("2026-05-20T10:00:00.000Z"),
+      endsAt: new Date("2026-05-20T11:00:00.000Z"),
+    });
+    await caller.create({
+      locationId: locationBId,
+      staffId,
+      serviceKind: "tattoo",
+      title: "Summary locB staffA",
+      startsAt: new Date("2026-05-20T11:00:00.000Z"),
+      endsAt: new Date("2026-05-20T12:00:00.000Z"),
+    });
+    await caller.create({
+      locationId: locationAId,
+      staffId,
+      serviceKind: "tattoo",
+      title: "Summary fuera de rango",
+      startsAt: new Date("2026-05-22T09:00:00.000Z"),
+      endsAt: new Date("2026-05-22T10:00:00.000Z"),
+    });
+
+    const byLocationAndRange = await caller.summary({
+      startsAt: new Date("2026-05-20T00:00:00.000Z"),
+      endsAt: new Date("2026-05-20T23:59:59.999Z"),
+      locationId: locationAId,
+    });
+    expect(byLocationAndRange.totalBookings).toBe(2);
+
+    const byLocationStaffAndRange = await caller.summary({
+      startsAt: new Date("2026-05-20T00:00:00.000Z"),
+      endsAt: new Date("2026-05-20T23:59:59.999Z"),
+      locationId: locationAId,
+      staffId,
+    });
+    expect(byLocationStaffAndRange.totalBookings).toBe(1);
   });
 });
